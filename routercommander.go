@@ -20,9 +20,10 @@ const (
 )
 
 var (
-	list     = flag.String("routerlist", "", "List with routers' names")
-	login    = flag.String("username", "admin", "username to use to ssh to a router")
-	password = flag.String("password", "", "Password to use for ssh session")
+	rtrFile  = flag.String("file", "", "File with comma seprated router names")
+	rtrList  = flag.String("list", "", "comma separated list of routers")
+	login    = flag.String("user", "admin", "username to use to ssh to a router")
+	password = flag.String("pass", "", "Password to use for ssh session")
 	logging  = flag.Int("v", 4, "Logging verbosity level, 1 - Panic, 2 - Fatal, 3 - Error, 4 - Warining, 5 - Info, 6 - Debug")
 	wg       sync.WaitGroup
 )
@@ -58,19 +59,60 @@ func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) 
 	return nil
 }
 
+func getFromFile() ([]string, error) {
+	list := []string{}
+	f, err := os.OpenFile(*rtrFile, os.O_RDONLY, 0666)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to open routers' list file with error: %+v", err)
+	}
+	defer f.Close()
+
+	fr := bufio.NewReader(f)
+	for {
+		router, _, err := fr.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		list = append(list, string(router))
+	}
+	return list, nil
+}
+
+func getFromList() ([]string, error) {
+	list := strings.Split(*rtrList, ",")
+	if len(list) == 0 {
+		return nil, fmt.Errorf("empty routers' list")
+	}
+	return list, nil
+}
+
 func main() {
 
 	if *login == "" || *password == "" {
 		log.Fatalf("--username and --password are mandatory parameters, exiting...")
 		flag.Usage()
 	}
-	commands := []string{"run on -f %s pcie_cfrw -w 0 0 0 2 2 1"}
-
-	f, err := os.OpenFile(*list, os.O_RDONLY, 0666)
-	if err != nil {
-		log.Fatalf("Failed to open routers' list file with error: %+v", err)
+	if *rtrFile != "" && *rtrList != "" {
+		log.Fatalf("keywords --file and --list are mutually exclusive, use only one of them, exiting...")
+		flag.Usage()
 	}
-	defer f.Close()
+	routers := []string{}
+	var err error
+	if rtrFile != nil {
+		routers, err = getFromFile()
+		if err != nil {
+			log.Fatalf("failed to build routers list from file: %s with error: %+v, exiting...", *rtrFile, err)
+		}
+	} else {
+		routers, err = getFromList()
+		if err != nil {
+			log.Fatalf("failed to build routers list command line parameter with error: %+v, exiting...", err)
+		}
+	}
+	commands := []string{"run on -f %s pcie_cfrw -w 0 0 0 2 2 1"}
 
 	sshConfig := &ssh.ClientConfig{
 		User: *login,
@@ -80,16 +122,7 @@ func main() {
 		HostKeyCallback: remoteHostKeyCallback,
 	}
 
-	fr := bufio.NewReader(f)
-	for {
-		router, _, err := fr.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Fatalf("Failed to read routers' list file with error: %+v", err)
-		}
-
+	for _, router := range routers {
 		wg.Add(1)
 		go worker(router, commands, "FP-X", sshConfig)
 	}
@@ -216,9 +249,9 @@ func fpx(cmd, slot string) string {
 	return c
 }
 
-func worker(rn []byte, commands []string, elementType string, sshConfig *ssh.ClientConfig) {
+func worker(rn string, commands []string, elementType string, sshConfig *ssh.ClientConfig) {
 	defer wg.Done()
-	log.Infof("router name: %s", string(rn))
+	log.Infof("router name: %s", rn)
 	routerName := string(rn) + ":22"
 
 	router, err := newRouter(routerName, sshConfig)
