@@ -15,17 +15,16 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const (
-	inventoryCommand = "show module"
-)
-
 var (
-	rtrFile  = flag.String("file", "", "File with comma seprated router names")
-	rtrList  = flag.String("list", "", "comma separated list of routers")
-	login    = flag.String("user", "admin", "username to use to ssh to a router")
-	password = flag.String("pass", "", "Password to use for ssh session")
-	logging  = flag.Int("v", 4, "Logging verbosity level, 1 - Panic, 2 - Fatal, 3 - Error, 4 - Warining, 5 - Info, 6 - Debug")
-	wg       sync.WaitGroup
+	rtrFile          = flag.String("file", "", "File with comma seprated router names")
+	rtrList          = flag.String("list", "", "comma separated list of routers")
+	login            = flag.String("user", "admin", "username to use to ssh to a router")
+	password         = flag.String("pass", "", "Password to use for ssh session")
+	logging          = flag.Int("v", 4, "Logging verbosity level, 1 - Panic, 2 - Fatal, 3 - Error, 4 - Warining, 5 - Info, 6 - Debug")
+	inventoryCommand = flag.String("invcmd", "admin show platform", "Command to collect router's inventory in quotes")
+	cmdList          = flag.String("cmds", "", "comma separated list of commands to run.")
+
+	wg sync.WaitGroup
 )
 
 var log *logrus.Logger
@@ -33,7 +32,6 @@ var log *logrus.Logger
 func init() {
 	flag.Parse()
 	log = logrus.New()
-	log.Formatter = new(logrus.JSONFormatter)
 	log.Formatter = new(logrus.TextFormatter)                  //default
 	log.Formatter.(*logrus.TextFormatter).DisableColors = true // remove colors
 	switch *logging {
@@ -59,7 +57,7 @@ func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) 
 	return nil
 }
 
-func getFromFile() ([]string, error) {
+func getRtrNameFromFile() ([]string, error) {
 	list := []string{}
 	f, err := os.OpenFile(*rtrFile, os.O_RDONLY, 0666)
 	if err != nil {
@@ -81,12 +79,14 @@ func getFromFile() ([]string, error) {
 	return list, nil
 }
 
-func getFromList() ([]string, error) {
+func getRtrNameFromList() []string {
 	list := strings.Split(*rtrList, ",")
-	if len(list) == 0 {
-		return nil, fmt.Errorf("empty routers' list")
-	}
-	return list, nil
+	return list
+}
+
+func getCmdFromList() []string {
+	list := strings.Split(*cmdList, ",")
+	return list
 }
 
 func main() {
@@ -101,18 +101,21 @@ func main() {
 	}
 	routers := []string{}
 	var err error
-	if rtrFile != nil {
-		routers, err = getFromFile()
+	if *rtrFile != "" {
+		routers, err = getRtrNameFromFile()
 		if err != nil {
 			log.Fatalf("failed to build routers list from file: %s with error: %+v, exiting...", *rtrFile, err)
 		}
+	} else if *rtrList != "" {
+		routers = getRtrNameFromList()
 	} else {
-		routers, err = getFromList()
-		if err != nil {
-			log.Fatalf("failed to build routers list command line parameter with error: %+v, exiting...", err)
-		}
+		log.Fatal("router list is empty, nothing to do, exiting...")
 	}
-	commands := []string{"run on -f %s pcie_cfrw -w 0 0 0 2 2 1"}
+	// commands := []string{"run on -f %s pcie_cfrw -w 0 0 0 2 2 1"}
+	if *cmdList == "" {
+		log.Fatal("command list is empty, nothing to do, exiting...")
+	}
+	commands := getCmdFromList()
 
 	sshConfig := &ssh.ClientConfig{
 		User: *login,
@@ -194,6 +197,7 @@ func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
 	defer session.Close()
+	log.Debugf("Running command: %s against router: %+v", cmd, client.RemoteAddr())
 	reply, err := session.Output(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command %s with error: %+v", cmd, err)
@@ -202,9 +206,9 @@ func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
 }
 
 func (r *router) getInventory() error {
-	reply, err := runCmd(inventoryCommand, r.client)
+	reply, err := runCmd(*inventoryCommand, r.client)
 	if err != nil {
-		return fmt.Errorf("Failed to run inventory command: %s with error: %+v", inventoryCommand, err)
+		return fmt.Errorf("Failed to run inventory command: %s with error: %+v", *inventoryCommand, err)
 	}
 	log.Debugf("getInventory(): Received reply from %+v of %d bytes, Reply: %s ", r.client.Conn.RemoteAddr(), len(reply), string(reply))
 
