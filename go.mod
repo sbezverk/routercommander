@@ -3,7 +3,7 @@ module github.com/sbezverk/routercommander
 go 1.17
 
 require (
-	github.com/sirupsen/logrus v1.8.1
+	github.com/golang/glog v1.0.0
 	golang.org/x/crypto v0.0.0-20220314234724-5d542ad81a58
 )
 

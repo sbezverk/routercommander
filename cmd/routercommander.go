@@ -8,66 +8,49 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/golang/glog"
 	"golang.org/x/crypto/ssh"
 )
 
 var (
-	rtrFile          = flag.String("file", "", "File with comma seprated router names")
-	rtrList          = flag.String("list", "", "comma separated list of routers")
-	login            = flag.String("user", "admin", "username to use to ssh to a router")
-	password         = flag.String("pass", "", "Password to use for ssh session")
-	logging          = flag.Int("v", 4, "Logging verbosity level, 1 - Panic, 2 - Fatal, 3 - Error, 4 - Warining, 5 - Info, 6 - Debug")
-	inventoryCommand = flag.String("invcmd", "admin show platform", "Command to collect router's inventory in quotes")
-	cmdList          = flag.String("cmds", "", "comma separated list of commands to run.")
-
-	wg sync.WaitGroup
+	rtrFile string
+	rtrName string
+	cmdFile string
+	login   string
+	pass    string
 )
 
-var log *logrus.Logger
+var wg sync.WaitGroup
 
 func init() {
-	flag.Parse()
-	log = logrus.New()
-	log.Formatter = new(logrus.TextFormatter)                  //default
-	log.Formatter.(*logrus.TextFormatter).DisableColors = true // remove colors
-	switch *logging {
-	case 1:
-		log.Level = logrus.PanicLevel
-	case 2:
-		log.Level = logrus.FatalLevel
-	case 3:
-		log.Level = logrus.ErrorLevel
-	case 4:
-		log.Level = logrus.WarnLevel
-	case 5:
-		log.Level = logrus.InfoLevel
-	case 6:
-		log.Level = logrus.DebugLevel
-	default:
-		log.Fatalf("Inavlid value %d for logging verbosity level", *logging)
-	}
+	runtime.GOMAXPROCS(1)
+	flag.StringVar(&rtrFile, "routers-file", "", "File with routers' names")
+	flag.StringVar(&cmdFile, "commands-file", "", "File commands to collect")
+	flag.StringVar(&rtrName, "router-name", "", "name of the router")
+	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
+	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	log.Infof("Callback is called with hostname: %s remote address: %s", hostname, remote.String())
+	glog.Infof("Callback is called with hostname: %s remote address: %s", hostname, remote.String())
 	return nil
 }
 
-func getRtrNameFromFile() ([]string, error) {
-	list := []string{}
-	f, err := os.OpenFile(*rtrFile, os.O_RDONLY, 0666)
+func getInfoFromFile(fn string) ([]string, error) {
+	list := make([]string, 0)
+	f, err := os.Open(fn)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to open routers' list file with error: %+v", err)
+		return nil, fmt.Errorf("fail to open file %s with error: %+v", err)
 	}
 	defer f.Close()
 
 	fr := bufio.NewReader(f)
 	for {
-		router, _, err := fr.ReadLine()
+		router, err := fr.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				break
@@ -76,58 +59,58 @@ func getRtrNameFromFile() ([]string, error) {
 		}
 		list = append(list, string(router))
 	}
+	if len(list) == 0 {
+		return nil, fmt.Errorf("file %s is empty", fn)
+	}
+
 	return list, nil
 }
 
-func getRtrNameFromList() []string {
-	list := strings.Split(*rtrList, ",")
-	return list
-}
-
-func getCmdFromList() []string {
-	list := strings.Split(*cmdList, ",")
-	return list
-}
-
 func main() {
+	flag.Parse()
+	_ = flag.Set("logtostderr", "true")
 
-	if *login == "" || *password == "" {
-		log.Fatalf("--username and --password are mandatory parameters, exiting...")
-		flag.Usage()
+	if login == "" || pass == "" {
+		glog.Error("--username and --password are mandatory parameters, exiting...")
+		os.Exit(1)
 	}
-	if *rtrFile != "" && *rtrList != "" {
-		log.Fatalf("keywords --file and --list are mutually exclusive, use only one of them, exiting...")
-		flag.Usage()
+	if rtrFile != "" && rtrName != "" {
+		glog.Error("--file and --list are mutually exclusive, exiting...")
+		os.Exit(1)
 	}
-	routers := []string{}
+	if cmdFile == "" {
+		glog.Infof("no commands file is specified, nothing to do, exiting...")
+		os.Exit(1)
+	}
+	routers := make([]string, 0)
 	var err error
-	if *rtrFile != "" {
-		routers, err = getRtrNameFromFile()
+	switch {
+	case rtrFile != "":
+		routers, err = getInfoFromFile(rtrFile)
 		if err != nil {
-			log.Fatalf("failed to build routers list from file: %s with error: %+v, exiting...", *rtrFile, err)
+			glog.Errorf("failed to get routers list from file: %s with error: %+v, exiting...", rtrFile, err)
+			os.Exit(1)
 		}
-	} else if *rtrList != "" {
-		routers = getRtrNameFromList()
-	} else {
-		log.Fatal("router list is empty, nothing to do, exiting...")
+	case rtrName != "":
+		routers = append(routers, rtrName)
 	}
-	// commands := []string{"run on -f %s pcie_cfrw -w 0 0 0 2 2 1"}
-	if *cmdList == "" {
-		log.Fatal("command list is empty, nothing to do, exiting...")
+	commands, err := getInfoFromFile(cmdFile)
+	if err != nil {
+		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
+		os.Exit(1)
 	}
-	commands := getCmdFromList()
 
 	sshConfig := &ssh.ClientConfig{
-		User: *login,
+		User: login,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(*password),
+			ssh.Password(pass),
 		},
 		HostKeyCallback: remoteHostKeyCallback,
 	}
 
 	for _, router := range routers {
 		wg.Add(1)
-		go worker(router, commands, "FP-X", sshConfig)
+		go worker(router, commands, sshConfig)
 	}
 	wg.Wait()
 }
@@ -135,10 +118,10 @@ func main() {
 // Router interface is a collection of methods
 type Router interface {
 	closeClient()
-	getInventory() error
+	//	getInventory() error
 	getName() string
 	getType(t string) []*element
-	collectOutput(elements []*element, cmds []string, conversion func(string, string) string) []string
+	collectOutput(cmds []string) []string
 }
 
 type router struct {
@@ -163,7 +146,7 @@ func newRouter(routerName string, sshConfig *ssh.ClientConfig) (Router, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to dial router: %s with error: %+v", routerName, err)
 	}
-	log.Debugf("Successfully dialed router: %s", routerName)
+	glog.Infof("Successfully dialed router: %s", routerName)
 	return &router{
 		name:      routerName,
 		client:    sshClient,
@@ -197,7 +180,7 @@ func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
 	defer session.Close()
-	log.Debugf("Running command: %s against router: %+v", cmd, client.RemoteAddr())
+	glog.Infof("Running command: %s against router: %+v", cmd, client.RemoteAddr())
 	reply, err := session.Output(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command %s with error: %+v", cmd, err)
@@ -205,43 +188,44 @@ func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
 	return reply, nil
 }
 
-func (r *router) getInventory() error {
-	reply, err := runCmd(*inventoryCommand, r.client)
-	if err != nil {
-		return fmt.Errorf("Failed to run inventory command: %s with error: %+v", *inventoryCommand, err)
-	}
-	log.Debugf("getInventory(): Received reply from %+v of %d bytes, Reply: %s ", r.client.Conn.RemoteAddr(), len(reply), string(reply))
+// func (r *router) getInventory() error {
+// 	reply, err := runCmd(*inventoryCommand, r.client)
+// 	if err != nil {
+// 		return fmt.Errorf("Failed to run inventory command: %s with error: %+v", *inventoryCommand, err)
+// 	}
+// 	log.Debugf("getInventory(): Received reply from %+v of %d bytes, Reply: %s ", r.client.Conn.RemoteAddr(), len(reply), string(reply))
 
-	result, err := parseReply(reply)
-	if err != nil {
-		return fmt.Errorf("Failed to parse reply for router: %s with error: %+v", r.name, err)
-	}
-	log.Debugf("getInventory(): parseReply result of %d bytes, Result: %v ", len(result), result)
+// 	result, err := parseReply(reply)
+// 	if err != nil {
+// 		return fmt.Errorf("Failed to parse reply for router: %s with error: %+v", r.name, err)
+// 	}
+// 	log.Debugf("getInventory(): parseReply result of %d bytes, Result: %v ", len(result), result)
 
-	r.inventory, err = parseInventory(result)
-	if err != nil {
-		return fmt.Errorf("Failed to parse inventory for router: %s with error: %+v", r.name, err)
-	}
-	log.Debugf("getInventory(): parseInventory router: %s inventory: %+v", r.name, r.inventory)
+// 	r.inventory, err = parseInventory(result)
+// 	if err != nil {
+// 		return fmt.Errorf("Failed to parse inventory for router: %s with error: %+v", r.name, err)
+// 	}
+// 	log.Debugf("getInventory(): parseInventory router: %s inventory: %+v", r.name, r.inventory)
 
-	return nil
-}
+// 	return nil
+// }
 
-func (r *router) collectOutput(elements []*element, cmds []string, conversion func(string, string) string) []string {
+func (r *router) collectOutput(cmds []string) []string {
 	result := []string{}
-	for _, element := range elements {
-		for _, cmd := range cmds {
-			c := conversion(cmd, element.Slot)
-			reply, err := runCmd(c, r.client)
-			if err != nil {
-				log.Warnf("collectOutput(): Failed to run command %s against router: %+v with error: %+v", c, r.client.Conn.RemoteAddr(), err)
-				continue
-			}
-			log.Debugf("collectOutput(): Received reply from %+v of %d bytes for command: %s, Reply: %s ",
-				r.client.Conn.RemoteAddr(), len(reply), c, string(reply))
-			result = append(result, string(reply))
+	//	for _, element := range elements {
+	for _, cmd := range cmds {
+		// c := conversion(cmd, element.Slot)
+		reply, err := runCmd(cmd, r.client)
+		if err != nil {
+			glog.Errorf("collectOutput(): Failed to run command %s against router: %+v with error: %+v", cmd, r.client.Conn.RemoteAddr(), err)
+			continue
 		}
+		glog.Infof("collectOutput(): Received reply from %+v of %d bytes for command: %s, Reply: %s ",
+			r.client.Conn.RemoteAddr(), len(reply), cmd, string(reply))
+		result = append(result, string(reply))
+		//		}
 	}
+
 	return result
 }
 
@@ -253,37 +237,30 @@ func fpx(cmd, slot string) string {
 	return c
 }
 
-func worker(rn string, commands []string, elementType string, sshConfig *ssh.ClientConfig) {
+func worker(rn string, commands []string, sshConfig *ssh.ClientConfig) {
 	defer wg.Done()
-	log.Infof("router name: %s", rn)
+	glog.Infof("router name: %s", rn)
 	routerName := string(rn) + ":22"
 
 	router, err := newRouter(routerName, sshConfig)
 	if err != nil {
-		log.Errorf("Failed to instantiate router object with error: %+v", err)
+		glog.Errorf("Failed to instantiate router object with error: %+v", err)
 		return
 	}
 	defer router.closeClient()
 
-	// Bulding inventory struct of the router
-	if err := router.getInventory(); err != nil {
-		log.Errorf("Failed to collect router: %s  inventory with error: %+v", router.getName(), err)
-		return
-	}
+	// // Bulding inventory struct of the router
+	// if err := router.getInventory(); err != nil {
+	// 	glog.Errorf("Failed to collect router: %s  inventory with error: %+v", router.getName(), err)
+	// 	return
+	// }
 
-	e := router.getType(elementType)
-	if len(e) == 0 {
-		// Nothing to do
-		log.Errorf("No elements of type: %s was found in router: %s  inventory", elementType, router.getName())
-		return
-	}
-
-	result := router.collectOutput(e, commands, fpx)
+	result := router.collectOutput(commands)
 	if len(result) == 0 {
-		log.Errorf("failed to collect output on router: %s", router.getName())
+		glog.Errorf("failed to collect output on router: %s", router.getName())
 		return
 	}
-	log.Printf("router name: %s \n ----------------------- \n results: %+v", router.getName(), result)
+	glog.Infof("router name: %s \n ----------------------- \n results: %+v", router.getName(), result)
 }
 
 func parseReply(reply []byte) ([]string, error) {
@@ -317,7 +294,7 @@ func parseInventory(data []string) ([]*element, error) {
 	for i, l := range data {
 		p := strings.Split(l, ",")
 		if !validSlot.MatchString(p[0]) {
-			log.Infof("parseInventory(): %s is not a valid slot", p[0])
+			glog.Infof("parseInventory(): %s is not a valid slot", p[0])
 			continue
 		}
 		e := element{
@@ -335,7 +312,7 @@ func parseInventory(data []string) ([]*element, error) {
 		}
 		e.State = strings.Trim(e.State, " ")
 		elements = append(elements, &e)
-		log.Debugf("parseInventory(): parsed inventory elemenet number: %d value: %v", i, e)
+		glog.Debugf("parseInventory(): parsed inventory elemenet number: %d value: %v", i, e)
 	}
 	if len(elements) == 0 {
 		return nil, fmt.Errorf("no inventory data found")
