@@ -203,19 +203,12 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
-
 	defer session.Close()
 	var buffInfo bytes.Buffer
 	var buffErr bytes.Buffer
-	// Enable system stdout
-	// Comment these if you uncomment to store in variable
+	// Enable system stdout and stderr
 	session.Stdout = &buffInfo
 	session.Stderr = &buffErr
-	//	modes := ssh.TerminalModes{
-	//		ssh.ECHO:          1,     // disable echoing
-	//		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-	//		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	//	}
 
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{}); err != nil {
 		return nil, fmt.Errorf("failed to pty with error: %+v", err)
@@ -228,8 +221,7 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	}
 
 	// Start remote shell
-	err = session.Shell()
-	if err != nil {
+	if err := session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
 
@@ -287,8 +279,16 @@ func worker(rn string, commands []string, sshConfig *ssh.ClientConfig) {
 		}
 		return
 	}
-
-	glog.Infof("router name: %s \n ----------------------- \n results: %s", router.getName(), string(result))
+	// Saving result in the file
+	r, err := os.Create("./" + router.getName() + ".log")
+	if err != nil {
+		glog.Errorf("failed to create log file for router %s with error: %+v", router.getName(), err)
+		return
+	}
+	defer r.Close()
+	if _, err := r.Write(result); err != nil {
+		glog.Errorf("failed to write to log file for router %s with error: %+v", router.getName(), err)
+	}
 }
 
 func parseReply(reply []byte) ([]string, error) {
