@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -50,14 +51,14 @@ func getInfoFromFile(fn string) ([]string, error) {
 
 	fr := bufio.NewReader(f)
 	for {
-		router, err := fr.ReadString('\n')
+		item, err := fr.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
-		list = append(list, string(router))
+		list = append(list, strings.Trim(item, "\n"))
 	}
 	if len(list) == 0 {
 		return nil, fmt.Errorf("file %s is empty", fn)
@@ -121,7 +122,7 @@ type Router interface {
 	//	getInventory() error
 	getName() string
 	getType(t string) []*element
-	collectOutput(cmds []string) ([]string, error)
+	collectOutput(cmds []string) ([]byte, error)
 }
 
 type router struct {
@@ -174,21 +175,6 @@ func (r *router) getType(t string) []*element {
 	return elements
 }
 
-func runCmd(cmd string, session *ssh.Session) ([]byte, error) {
-	//	session, err := client.NewSession()
-	//	if err != nil {
-	//		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
-	//	}
-
-	//	defer session.Close()
-	// glog.Infof("Running command: %s against router: %+v", cmd, client.RemoteAddr())
-	reply, err := session.Output(cmd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to run command %s with error: %+v", cmd, err)
-	}
-	return reply, nil
-}
-
 // func (r *router) getInventory() error {
 // 	reply, err := runCmd(*inventoryCommand, r.client)
 // 	if err != nil {
@@ -211,29 +197,59 @@ func runCmd(cmd string, session *ssh.Session) ([]byte, error) {
 // 	return nil
 // }
 
-func (r *router) collectOutput(cmds []string) ([]string, error) {
+func (r *router) collectOutput(cmds []string) ([]byte, error) {
+	// Create sesssion
 	session, err := r.client.NewSession()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
+
 	defer session.Close()
+	var buffInfo bytes.Buffer
+	var buffErr bytes.Buffer
+	// Enable system stdout
+	// Comment these if you uncomment to store in variable
+	session.Stdout = &buffInfo
+	session.Stderr = &buffErr
+	//	modes := ssh.TerminalModes{
+	//		ssh.ECHO:          1,     // disable echoing
+	//		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+	//		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	//	}
 
-	result := make([]string, 0)
-	for _, cmd := range cmds {
-		glog.Infof("><SB> Executing command: %s", cmd)
-		// c := conversion(cmd, element.Slot)
-		reply, err := runCmd(cmd, session)
-		if err != nil {
-			glog.Errorf("collectOutput(): Failed to run command %s against router: %+v with error: %+v", cmd, r.client.Conn.RemoteAddr(), err)
-			continue
-		}
-		//		glog.Infof("collectOutput(): Received reply from %+v of %d bytes for command: %s, Reply: %s ",
-		//			r.client.Conn.RemoteAddr(), len(reply), cmd, string(reply))
-		result = append(result, string(reply))
-		//		}
+	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{}); err != nil {
+		return nil, fmt.Errorf("failed to pty with error: %+v", err)
 	}
 
-	return result, nil
+	// StdinPipe for commands
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish stdin pipe with error: %+v", err)
+	}
+
+	// Start remote shell
+	err = session.Shell()
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
+	}
+
+	// send the commands
+	for _, cmd := range cmds {
+		if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
+			return nil, fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)
+		}
+	}
+	// Closing session
+	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
+		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+	}
+	// Wait for sess to finish
+
+	if err := session.Wait(); err != nil {
+		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+	}
+
+	return buffInfo.Bytes(), nil
 }
 
 func fpx(cmd, slot string) string {
@@ -265,10 +281,14 @@ func worker(rn string, commands []string, sshConfig *ssh.ClientConfig) {
 	result, err := router.collectOutput(commands)
 	if err != nil {
 		glog.Errorf("failed to collect output on router: %s wirh error: %+v", router.getName(), err)
+		if result != nil {
+			// In case of an error result carries stderr
+			glog.Errorf("stderr: %s", string(result))
+		}
 		return
 	}
 
-	glog.Infof("router name: %s \n ----------------------- \n results: %+v", router.getName(), result)
+	glog.Infof("router name: %s \n ----------------------- \n results: %s", router.getName(), string(result))
 }
 
 func parseReply(reply []byte) ([]string, error) {
