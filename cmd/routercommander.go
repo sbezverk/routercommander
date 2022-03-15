@@ -44,7 +44,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 	list := make([]string, 0)
 	f, err := os.Open(fn)
 	if err != nil {
-		return nil, fmt.Errorf("fail to open file %s with error: %+v", err)
+		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
 	}
 	defer f.Close()
 
@@ -121,7 +121,7 @@ type Router interface {
 	//	getInventory() error
 	getName() string
 	getType(t string) []*element
-	collectOutput(cmds []string) []string
+	collectOutput(cmds []string) ([]string, error)
 }
 
 type router struct {
@@ -144,7 +144,7 @@ type element struct {
 func newRouter(routerName string, sshConfig *ssh.ClientConfig) (Router, error) {
 	sshClient, err := ssh.Dial("tcp", routerName, sshConfig)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to dial router: %s with error: %+v", routerName, err)
+		return nil, fmt.Errorf("failed to dial router: %s with error: %+v", routerName, err)
 	}
 	glog.Infof("Successfully dialed router: %s", routerName)
 	return &router{
@@ -174,13 +174,14 @@ func (r *router) getType(t string) []*element {
 	return elements
 }
 
-func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
-	session, err := client.NewSession()
-	if err != nil {
-		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
-	}
-	defer session.Close()
-	glog.Infof("Running command: %s against router: %+v", cmd, client.RemoteAddr())
+func runCmd(cmd string, session *ssh.Session) ([]byte, error) {
+	//	session, err := client.NewSession()
+	//	if err != nil {
+	//		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
+	//	}
+
+	//	defer session.Close()
+	// glog.Infof("Running command: %s against router: %+v", cmd, client.RemoteAddr())
 	reply, err := session.Output(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command %s with error: %+v", cmd, err)
@@ -210,23 +211,29 @@ func runCmd(cmd string, client *ssh.Client) ([]byte, error) {
 // 	return nil
 // }
 
-func (r *router) collectOutput(cmds []string) []string {
-	result := []string{}
-	//	for _, element := range elements {
+func (r *router) collectOutput(cmds []string) ([]string, error) {
+	session, err := r.client.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	result := make([]string, 0)
 	for _, cmd := range cmds {
+		glog.Infof("><SB> Executing command: %s", cmd)
 		// c := conversion(cmd, element.Slot)
-		reply, err := runCmd(cmd, r.client)
+		reply, err := runCmd(cmd, session)
 		if err != nil {
 			glog.Errorf("collectOutput(): Failed to run command %s against router: %+v with error: %+v", cmd, r.client.Conn.RemoteAddr(), err)
 			continue
 		}
-		glog.Infof("collectOutput(): Received reply from %+v of %d bytes for command: %s, Reply: %s ",
-			r.client.Conn.RemoteAddr(), len(reply), cmd, string(reply))
+		//		glog.Infof("collectOutput(): Received reply from %+v of %d bytes for command: %s, Reply: %s ",
+		//			r.client.Conn.RemoteAddr(), len(reply), cmd, string(reply))
 		result = append(result, string(reply))
 		//		}
 	}
 
-	return result
+	return result, nil
 }
 
 func fpx(cmd, slot string) string {
@@ -255,11 +262,12 @@ func worker(rn string, commands []string, sshConfig *ssh.ClientConfig) {
 	// 	return
 	// }
 
-	result := router.collectOutput(commands)
-	if len(result) == 0 {
-		glog.Errorf("failed to collect output on router: %s", router.getName())
+	result, err := router.collectOutput(commands)
+	if err != nil {
+		glog.Errorf("failed to collect output on router: %s wirh error: %+v", router.getName(), err)
 		return
 	}
+
 	glog.Infof("router name: %s \n ----------------------- \n results: %+v", router.getName(), result)
 }
 
@@ -312,7 +320,7 @@ func parseInventory(data []string) ([]*element, error) {
 		}
 		e.State = strings.Trim(e.State, " ")
 		elements = append(elements, &e)
-		glog.Debugf("parseInventory(): parsed inventory elemenet number: %d value: %v", i, e)
+		glog.Infof("parseInventory(): parsed inventory elemenet number: %d value: %v", i, e)
 	}
 	if len(elements) == 0 {
 		return nil, fmt.Errorf("no inventory data found")
