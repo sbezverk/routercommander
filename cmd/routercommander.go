@@ -210,7 +210,11 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	session.Stdout = &buffInfo
 	session.Stderr = &buffErr
 
-	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{}); err != nil {
+	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
+		ssh.ECHO:          1,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}); err != nil {
 		return nil, fmt.Errorf("failed to pty with error: %+v", err)
 	}
 
@@ -224,7 +228,11 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	if err := session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
-
+	// Making sure the output is not paged
+	glog.Infof("><SB> sending \"term len 0\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n", "term len 0"); err != nil {
+		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+	}
 	// send the commands
 	for _, cmd := range cmds {
 		if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
@@ -232,13 +240,16 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 		}
 	}
 	// Closing session
+	glog.Infof("><SB> sending \"exit\"")
 	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
 		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
 	}
 	// Wait for sess to finish
 
+	// Waiting for the session to close
+	glog.Infof("waiting for the session with %s to exit", r.name)
 	if err := session.Wait(); err != nil {
-		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+		return buffErr.Bytes(), fmt.Errorf("failed to wait for the session with error: %+v", err)
 	}
 
 	return buffInfo.Bytes(), nil
@@ -280,14 +291,14 @@ func worker(rn string, commands []string, sshConfig *ssh.ClientConfig) {
 		return
 	}
 	// Saving result in the file
-	r, err := os.Create("./" + router.getName() + ".log")
+	r, err := os.Create("./" + rn + ".log")
 	if err != nil {
-		glog.Errorf("failed to create log file for router %s with error: %+v", router.getName(), err)
+		glog.Errorf("failed to create log file for router %s with error: %+v", rn, err)
 		return
 	}
 	defer r.Close()
 	if _, err := r.Write(result); err != nil {
-		glog.Errorf("failed to write to log file for router %s with error: %+v", router.getName(), err)
+		glog.Errorf("failed to write to log file for router %s with error: %+v", rn, err)
 	}
 }
 

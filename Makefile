@@ -16,6 +16,9 @@ routercommander-mac:
 	mkdir -p bin
 	$(MAKE) -C ./cmd compile-routercommander-mac
 
+routercommander-win:
+	mkdir -p bin
+	$(MAKE) -C ./cmd compile-routercommander-win
 clean:
 	rm -rf bin
 
