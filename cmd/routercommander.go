@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 	"golang.org/x/crypto/ssh"
@@ -205,13 +206,12 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	}
 	defer session.Close()
 	var buffInfo bytes.Buffer
-	var buffErr bytes.Buffer
+
 	// Enable system stdout and stderr
 	session.Stdout = &buffInfo
-	session.Stderr = &buffErr
 
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
-		ssh.ECHO:          1,
+		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
 	}); err != nil {
@@ -229,27 +229,34 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
 	// Making sure the output is not paged
-	glog.Infof("><SB> sending \"term len 0\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "term len 0"); err != nil {
-		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+	glog.Infof("sending \"term len 0\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term len 0"); err != nil {
+		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
+	}
+	glog.Infof("sending \"term width 256\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term width 256"); err != nil {
+		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term width 256", err)
 	}
 	// send the commands
 	for _, cmd := range cmds {
-		if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
+		glog.Infof("sending \"%s\"", cmd)
+		if _, err := fmt.Fprintf(stdin, "%s\n\r", cmd); err != nil {
 			return nil, fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)
 		}
+		time.Sleep(time.Second * 1)
 	}
 	// Closing session
-	glog.Infof("><SB> sending \"exit\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
-		return buffErr.Bytes(), fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
+	glog.Infof("sending \"exit\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "exit"); err != nil {
+		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
 	}
-	// Wait for sess to finish
 
 	// Waiting for the session to close
 	glog.Infof("waiting for the session with %s to exit", r.name)
 	if err := session.Wait(); err != nil {
-		return buffErr.Bytes(), fmt.Errorf("failed to wait for the session with error: %+v", err)
+		if _, ok := err.(*ssh.ExitMissingError); !ok {
+			return nil, fmt.Errorf("failed to wait for the session with error: %+v", err)
+		}
 	}
 
 	return buffInfo.Bytes(), nil

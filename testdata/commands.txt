@@ -1,0 +1,88 @@
+show platform
+sh bun brief 
+sh ospf interface brief 
+sh int brief 
+sh mpls ldp interface brief 
+sh mpls ldp neighbor brief 
+sh mpls traffic-eng tunnels summary 
+sh mpls traffic-eng tunnels detail 
+sh rsvp interface 
+sh bfd summary 
+sh bfd session
+sh bfd session detail 
+sh cef drops 
+sh drops-all location all 
+show lpts pifib hardware entry brief location all
+show controllers fia diagshell 0 "diag counter g" location all
+show controllers npu diag cos non instance all location all
+show controllers npu diag dbal tablesinfo instance all location all 
+show controllers npu stats traps-all instance all location all | exclude "0         0"
+show controllers npu stats counters-all instance all location all | exclude "= 0"
+show controllers npu resources all location all
+show controller fia stat instance all location all | exclude ":                0"
+show controllers npu stats voq ingress interface all instance all location all
+show interfaces | in packets/sec | exclude 0 packets
+Show netio drops location all
+show asic-errors all detail location all
+show captured packets ingress hexdump location all
+show spp node-counters location all
+show dpa resources all location 0/0/CPU0
+show dpa resources all location 0/1/CPU0
+show dpa resources all location 0/2/CPU0
+show dpa resources all location 0/3/CPU0
+show cef drops location 0/0/cpu0
+show captured packets ingress location 0/0/cpu0
+show controllers npu stats traps-all instance 0 location 0/0/cpu0
+show asic-errors fia 0 all location 0/0/cpu0
+show controllers npu stats counters-all instance 0 location 0/0/cpu0
+show controllers npu stats traps-all instance 1 location 0/0/cpu0
+show asic-errors fia 1 all location 0/0/cpu0
+show controllers npu stats counters-all instance 1 location 0/0/cpu0
+show controllers fia driver location 0/0/cpu0
+show controllers fia link-info rx 0 35 flap instance 0 location 0/0/cpu0
+show controllers fia link-info rx 0 35 flap instance 1 location 0/0/cpu0
+show controllers fia diagshell 0 "fabric reachability 0" location 0/1/cpu0
+show controllers fia diagshell 1 "fabric reachability 0" location 0/1/cpu0
+show cef drops location 0/1/cpu0
+show captured packets ingress location 0/1/cpu0
+show controllers npu stats traps-all instance 0 location 0/1/cpu0
+show asic-errors fia 0 all location 0/1/cpu0
+show controllers npu stats counters-all instance 0 location 0/1/cpu0
+show controllers npu stats traps-all instance 1 location 0/1/cpu0
+show asic-errors fia 1 all location 0/1/cpu0
+show controllers npu stats counters-all instance 1 location 0/1/cpu0
+show controllers fia driver location 0/1/cpu0
+show controllers fia link-info rx 0 35 flap instance 0 location 0/1/cpu0
+show controllers fia link-info rx 0 35 flap instance 1 location 0/1/cpu0
+show controllers fia diagshell 0 "fabric reachability 0" location 0/1/cpu0
+show controllers fia diagshell 1 "fabric reachability 0" location 0/1/cpu0
+show cef drops location 0/2/cpu0
+show captured packets ingress location 0/2/cpu0
+show controllers npu stats traps-all instance 0 location 0/2/cpu0
+show asic-errors fia 0 all location 0/2/cpu0
+show controllers npu stats counters-all instance 0 location 0/2/cpu0
+show controllers npu stats traps-all instance 1 location 0/2/cpu0
+show asic-errors fia 1 all location 0/2/cpu0
+show controllers npu stats counters-all instance 1 location 0/2/cpu0
+show controllers fia driver location 0/2/cpu0
+show controllers fia link-info rx 0 35 flap instance 0 location 0/1/cpu0
+show controllers fia link-info rx 0 35 flap instance 1 location 0/1/cpu0
+show controllers fia diagshell 0 "fabric reachability 0" location 0/2/cpu0
+show controllers fia diagshell 1 "fabric reachability 0" location 0/2/cpu0
+show cef drops location 0/3/cpu0
+show captured packets ingress location 0/3/cpu0
+show controllers npu stats traps-all instance 0 location 0/3/cpu0
+show asic-errors fia 0 all location 0/3/cpu0
+show controllers npu stats counters-all instance 0 location 0/3/cpu0
+show controllers npu stats traps-all instance 1 location 0/3/cpu0
+show asic-errors fia 1 all location 0/3/cpu0
+show controllers npu stats counters-all instance 1 location 0/3/cpu0
+show controllers fia driver location 0/3/cpu0
+show controllers fia link-info rx 0 35 flap instance 0 location 0/3/cpu0
+show controllers fia link-info rx 0 35 flap instance 1 location 0/3/cpu0
+show controllers fia diagshell 0 "fabric reachability 0" location 0/3/cpu0
+show controllers fia diagshell 1 "fabric reachability 0" location 0/3/cpu0
+show logging
+show interfaces
+show install active
+sh users
