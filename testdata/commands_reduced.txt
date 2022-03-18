@@ -1,2 +1,2 @@
+show platform
 show controllers fia diagshell 0 "diag counter g" location all
-
