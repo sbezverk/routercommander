@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/sbezverk/routercommander/cmd/pkg/processor"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -205,10 +206,10 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
 	defer session.Close()
-	var buffInfo bytes.Buffer
-
+	// buffInfo := bytes.NewBuffer(make([]byte, 4096))
+	buffInfo := processor.NewFeed()
 	// Enable system stdout and stderr
-	session.Stdout = &buffInfo
+	session.Stdout = buffInfo
 
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
 		ssh.ECHO:          0,
@@ -228,29 +229,54 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	if err := session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
-	// Making sure the output is not paged
+	// Making sure the output is not paged and at the same time attempting to find router's prompt
 	glog.Infof("sending \"term len 0\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term len 0"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n", "term len 0"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
 	}
+
+	// time.Sleep(time.Second * 1)
+	// prompt, err := getPrompt(buffInfo.Bytes())
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to find prompt in %s", buffInfo.String())
+	// }
+	// glog.Infof("><SB> discovered prompt: %s", string(prompt))
+
 	glog.Infof("sending \"term width 256\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term width 256"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n", "term width 256"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term width 256", err)
 	}
+	// glog.Infof("><SB> with command sent: %s content: %s", "term width 256", buffInfo.String())
+	// if err := waitForCmdCompletion(prompt, buffInfo); err != nil {
+	// 	return nil, fmt.Errorf("failed to wait for  command %s completion with error: %+v", "term width 256", err)
+	// }
 	// send the commands
 	for _, cmd := range cmds {
 		glog.Infof("sending \"%s\"", cmd)
-		if _, err := fmt.Fprintf(stdin, "%s\n\r", cmd); err != nil {
+		if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
 			return nil, fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)
 		}
-		time.Sleep(time.Second * 1)
+		// glog.Infof("><SB> with command sent: %s content: %s", cmd, buffInfo.String())
+		// if err := waitForCmdCompletion(prompt, buffInfo); err != nil {
+		// 	return nil, fmt.Errorf("failed to wait for  command %s completion with error: %+v", cmd, err)
+		// }
+		// time.Sleep(time.Second * 1)
 	}
 	// Closing session
+	// if _, err := fmt.Fprint(stdin, "\n\n\n"); err != nil {
+	// 	return nil, fmt.Errorf("failed to send command %s  with error: %+v", "\n\n\n", err)
+	// }
+	// time.Sleep(time.Second * 10)
 	glog.Infof("sending \"exit\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n\r", "exit"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
 	}
 
+	// glog.Infof("><SB> with command sent: %s content: %s", "exit", buffInfo.String())
+
+	// if err := waitForCmdCompletion(prompt, buffInfo); err != nil {
+	// 	return nil, fmt.Errorf("failed to wait for  command %s completion with error: %+v", "exit", err)
+	// }
 	// Waiting for the session to close
 	glog.Infof("waiting for the session with %s to exit", r.name)
 	if err := session.Wait(); err != nil {
@@ -260,6 +286,33 @@ func (r *router) collectOutput(cmds []string) ([]byte, error) {
 	}
 
 	return buffInfo.Bytes(), nil
+}
+
+var crlf = []byte{0x0D, 0x0A}
+
+func getPrompt(b []byte) ([]byte, error) {
+	n := bytes.LastIndex(b, crlf)
+	if n == -1 {
+		return nil, fmt.Errorf("not found")
+	}
+
+	return b[n+len(crlf):], nil
+}
+
+func waitForCmdCompletion(prompt []byte, buffInfo bytes.Buffer) error {
+	ticker := time.NewTicker(time.Millisecond * 100)
+	timeout := time.NewTimer(time.Second * 30)
+	for {
+		if bytes.Equal(prompt, buffInfo.Bytes()[len(buffInfo.Bytes())-len(prompt):]) {
+			return nil
+		}
+		select {
+		case <-ticker.C:
+			continue
+		case <-timeout.C:
+			return fmt.Errorf("timeout")
+		}
+	}
 }
 
 func fpx(cmd, slot string) string {
