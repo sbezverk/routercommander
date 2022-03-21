@@ -59,20 +59,8 @@ func (c *cmdBuffer) Write(b []byte) (n int, err error) {
 	copy(c.buffer[c.currentPos:], b)
 	c.currentPos += l
 	return l, nil
-
-	// if c.newCmdFound {
-	// 	// glog.Infof("><SB> exit was found previously")
-	// 	return c.buffer.Write(b)
-	// }
-	// if exit.Match(b) {
-	// 	glog.Infof("><SB> found exit")
-	// 	c.newCmdFound = true
-	// 	//return len(b), nil
-	// }
-	// // Ignoring bytes since they are part of ssh commands echo sequence
-	// //	glog.Infof("><SB> match not found in %s", string(b))
-	// return len(b), nil
 }
+
 func (c *cmdBuffer) Bytes() []byte {
 	c.Lock()
 	defer c.Unlock()

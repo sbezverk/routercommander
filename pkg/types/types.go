@@ -1,6 +1,7 @@
 package types
 
 type ShowCommand struct {
+	Cmd      string   `yaml:"command"`
 	Times    int      `yaml:"times"`
 	Interval int      `yaml:"interval"`
 	Location []string `yaml:"location"`
@@ -8,5 +9,5 @@ type ShowCommand struct {
 }
 
 type Commands struct {
-	List map[string]*ShowCommand `yaml:"commands"`
+	List []*ShowCommand `yaml:"commands"`
 }
