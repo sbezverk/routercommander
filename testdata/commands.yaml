@@ -1,0 +1,15 @@
+commands:
+  - "show cef drops":
+      times: 5
+      interval: 10
+      location:
+        - "all"
+      pattern:
+        - "drops"
+  - "show controllers npu stats traps-all instance 0":
+      location:
+        - "0/0/CPU0"
+        - "0/1/CPU0"
+        - "0/2/CPU0"
+      pattern:
+        - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
