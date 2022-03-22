@@ -10,6 +10,7 @@ cmd/bin
 perf
 *.pdf
 .DS_Store
+*.log
 
 # Test binary, built with `go test -c`
 *.test

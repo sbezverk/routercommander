@@ -56,9 +56,9 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 	session.Stdout = buffInfo
 
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
+		//		ssh.ECHO:          1,
+		//		ssh.TTY_OP_ISPEED: 14400,
+		//		ssh.TTY_OP_OSPEED: 14400,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to pty with error: %+v", err)
 	}
