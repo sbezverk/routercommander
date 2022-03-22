@@ -51,13 +51,12 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
 	defer session.Close()
-	// buffInfo := bytes.NewBuffer(make([]byte, 4096))
+
 	buffInfo := processor.NewFeed()
-	// Enable system stdout and stderr
 	session.Stdout = buffInfo
 
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
-		ssh.ECHO:          0,
+		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
 	}); err != nil {
@@ -88,6 +87,7 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 	if err := r.sendCommands(stdin, cmds.List); err != nil {
 		return nil, err
 	}
+	//	time.Sleep(time.Second * 30)
 	glog.Infof("sending \"exit\"")
 	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
@@ -101,7 +101,7 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 		}
 	}
 
-	return buffInfo.Bytes(), nil
+	return buffInfo.FinalizedBytes(), nil
 }
 
 func (r *router) sendCommands(stdin io.WriteCloser, list []*ShowCommand) error {

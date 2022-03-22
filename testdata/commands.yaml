@@ -1,11 +1,76 @@
 commands:
   - command: "show cef drops"
-    times: 5
-    interval: 10
+    #    times: 5
+    #    interval: 10
     location:
       - "all"
     pattern:
       - "drops"
+  - command: show platform
+  - command: sh bun brief
+  - command: sh ospf interface brief
+  - command: sh int brief
+  - command: sh mpls ldp interface brief
+  - command: sh mpls ldp neighbor brief
+  - command: sh mpls traffic-eng tunnels summary
+  - command: sh mpls traffic-eng tunnels detail
+  - command: sh rsvp interface
+  - command: sh bfd summary
+  - command: sh bfd session
+  - command: sh bfd session detail
+  - command: sh drops-all
+    location:
+      - "all"
+  - command: show lpts pifib hardware entry brief
+    location:
+      - "all"
+  - command: 'show controllers fia diagshell 0 "diag counter g"'
+    location:
+      - "all"
+  - command: show controllers npu diag cos non instance all
+    location:
+      - "all"
+  - command: show controllers npu diag dbal tablesinfo instance all
+    location:
+      - "all"
+  - command: show controllers npu resources all
+    location:
+      - "all"
+  - command: show controller fia stat instance all
+    location:
+      - "all"
+  - command: show controllers npu stats voq ingress interface all instance all
+    location:
+      - "all"
+  - command: Show netio drops
+    location:
+      - "all"
+  - command: show asic-errors all detail
+    location:
+      - "all"
+  - command: show captured packets ingress hexdump
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show spp node-counters
+    location:
+      - "all"
+  - command: show dpa resources all
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show asic-errors fia 0 all
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show asic-errors fia 1 all
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
   - command: "show controllers npu stats traps-all instance 0"
     location:
       - "0/0/CPU0"
@@ -13,3 +78,49 @@ commands:
       - "0/2/CPU0"
     pattern:
       - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
+  - command: show controllers npu stats counters-all instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: "show controllers npu stats traps-all instance 1"
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
+  - command: show controllers npu stats counters-all instance 1
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show controllers fia driver
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show controllers fia link-info rx 0 35 flap instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show controllers fia link-info rx 0 35 flap instance 1
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show controllers fia diagshell 0 "fabric reachability 0"
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show controllers fia diagshell 1 "fabric reachability 0"
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+  - command: show logging
+  - command: show interfaces
+  - command: show install active
+  - command: sh users
