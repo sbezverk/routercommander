@@ -14,7 +14,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/types"
 	"golang.org/x/crypto/ssh"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var (
@@ -96,7 +95,7 @@ func main() {
 		routers = append(routers, rtrName)
 	}
 
-	commands, err := getCommands(cmdFile)
+	commands, err := types.GetCommands(cmdFile)
 	if err != nil {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
@@ -147,28 +146,4 @@ func collect(rn string, commands *types.Commands, sshConfig *ssh.ClientConfig) {
 	if _, err := r.Write(result); err != nil {
 		glog.Errorf("failed to write to log file for router %s with error: %+v", rn, err)
 	}
-}
-
-func getCommands(fn string) (*types.Commands, error) {
-	f, err := os.Open(fn)
-	if err != nil {
-		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
-	}
-	defer f.Close()
-	l, err := os.Stat(fn)
-	if err != nil {
-		return nil, fmt.Errorf("fail to get stats for file %s with error: %+v", fn, err)
-	}
-	b := make([]byte, l.Size())
-	if _, err := f.Read(b); err != nil {
-		return nil, fmt.Errorf("fail to read file %s with error: %+v", fn, err)
-	}
-	c := &types.Commands{
-		List: make([]*types.ShowCommand, 0),
-	}
-	if err := yaml.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("fail tp unmarshal commands yaml file %s with error: %+v", fn, err)
-	}
-
-	return c, nil
 }
