@@ -1,12 +1,12 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/sbezverk/routercommander/pkg/processor"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,9 +18,9 @@ type Router interface {
 }
 
 type router struct {
-	name      string
-	client    *ssh.Client
-	sshConfig *ssh.ClientConfig
+	name   string
+	client *ssh.Client
+	// sshConfig *ssh.ClientConfig
 }
 
 func NewRouter(routerName string, sshConfig *ssh.ClientConfig) (Router, error) {
@@ -30,9 +30,9 @@ func NewRouter(routerName string, sshConfig *ssh.ClientConfig) (Router, error) {
 	}
 	glog.Infof("Successfully dialed router: %s", routerName)
 	return &router{
-		name:      routerName,
-		client:    sshClient,
-		sshConfig: sshConfig,
+		name:   routerName,
+		client: sshClient,
+		// sshConfig: sshConfig,
 	}, nil
 }
 
@@ -52,13 +52,10 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 	}
 	defer session.Close()
 
-	buffInfo := processor.NewFeed()
-	session.Stdout = buffInfo
-
 	if err := session.RequestPty("vt100", 80, 40, ssh.TerminalModes{
-		//		ssh.ECHO:          1,
-		//		ssh.TTY_OP_ISPEED: 14400,
-		//		ssh.TTY_OP_OSPEED: 14400,
+		ssh.ECHO:          0,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
 	}); err != nil {
 		return nil, fmt.Errorf("failed to pty with error: %+v", err)
 	}
@@ -69,6 +66,24 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 		return nil, fmt.Errorf("failed to establish stdin pipe with error: %+v", err)
 	}
 
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("failed to establish stdin pipe with error: %+v", err)
+	}
+
+	buffer := make([]byte, 0)
+	go func() {
+		l := make([]byte, 1024)
+		for {
+			if n, err := stdout.Read(l); err == nil {
+				// fmt.Printf("%s", l[:n])
+				nl := bytes.Replace(l[:n], []byte{0x0d}, []byte{}, -1)
+				buffer = append(buffer, nl...)
+			} else {
+				return
+			}
+		}
+	}()
 	// Start remote shell
 	if err := session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
@@ -81,13 +96,18 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 
 	glog.Infof("sending \"term width 256\"")
 	if _, err := fmt.Fprintf(stdin, "%s\n", "term width 256"); err != nil {
+		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
+	}
+
+	glog.Infof("sending \"show version\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n", "show version"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term width 256", err)
 	}
 
 	if err := r.sendCommands(stdin, cmds.List); err != nil {
 		return nil, err
 	}
-	//	time.Sleep(time.Second * 30)
+
 	glog.Infof("sending \"exit\"")
 	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
@@ -101,7 +121,7 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 		}
 	}
 
-	return buffInfo.FinalizedBytes(), nil
+	return buffer, nil
 }
 
 func (r *router) sendCommands(stdin io.WriteCloser, list []*ShowCommand) error {
