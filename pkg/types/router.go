@@ -99,11 +99,6 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
 	}
 
-	glog.Infof("sending \"show version\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "show version"); err != nil {
-		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term width 256", err)
-	}
-
 	if err := r.sendCommands(stdin, cmds.List); err != nil {
 		return nil, err
 	}
