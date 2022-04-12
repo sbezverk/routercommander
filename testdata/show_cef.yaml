@@ -5,4 +5,4 @@ commands:
     location:
       - "all"
     pattern:
-      - '^((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*$'
+      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
