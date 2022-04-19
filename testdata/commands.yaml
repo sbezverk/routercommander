@@ -1,22 +1,36 @@
 commands:
-  #  - command: admin show environment all
-  #    pattern:
-  #      #  0/0          NC55-36X100G-A-SE     1050         511       ON
-  #      - '(\s*[0-9]\/(FT|FC)?[0-9])\s+([a-zA-Z\-0-9]+)\s+(\d+\s+){2}\s+((?!ON).)*\n'
-  #      # 0/PM0       3kW-AC      211.7      3.3     12.0     52.5    OK
-  #      - '(\s*[0-9]\/PM[0-9])\s+([a-zA-Z\-0-9]+)\s+(\d+(\.*)(\d*)+\s+){4}\s+((?!OK).)*\n'
-  #      # FAN0             7935
-  #      - 'FAN[0-9]\s+((?![1-9]).)*\n'
-  #  - command: admin show controller fabric health
-  #    pattern:
-  #      #     |FSDB status|Ok|
-  #      - '\|FSDB status\|((?!Ok).)*\n'
+  - command: admin show environment all
+    pattern:
+      #  0/0          NC55-36X100G-A-SE     1050         511       ON
+      - '(\s*\d\/(FT|FC)?\d)\s+([a-zA-Z\-0-9]+)\s+(\d+\s+){2}\w(?!N).*\n'
+        # 0/PM0       3kW-AC      211.7      3.3     12.0     52.5    OK
+      - '(\s*\d\/PM\d)\s+([a-zA-Z\-0-9]+)\s+(\d+\.*\d*\s+){4}\w(?!K).*\n'
+        # FAN0             7935
+      - 'FAN[0-9]\s+((?![1-9]).)*\n'
+  - command: admin show controller fabric health
+    pattern:
+      #     |FSDB status|Ok|
+      - '\s*\|FSDB status\s*\|\s*(?!Ok)..\n'
+      #     |SFE status  |  Ok |  Ok |  Ok |  Ok |  Ok |  Ok |
+      - '\s*\|SFE status\s*\|\s+(?!Ok)..\s*\|(\s+\w+\s+\|){5}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|)\s+(?!Ok)..\s*\|(\s+\w+\s+\|){4}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){2}\s+(?!Ok)..\s*\|(\s+\w+\s+\|){3}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){3}\s+(?!Ok)..\s*\|(\s+\w+\s+\|){2}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){4}\s+(?!Ok)..\s*\|(\s+\w+\s+\|)\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){5}\s+(?!Ok)..\s*\|\n'
+      #     0     UP    UP       0        Yes
+      - '\s*\d\s+(?!UP)..\s+\w+\s+\d\s+\w+\s*\n'
+      - '\s*\d\s+\w+\s+(?!UP)..\s+\d\s+\w+\s*\n'
+      - '\s*\d\s+\w+\s+\w+\s+[1-9][0-9]*\s+\w+\s*\n'
   - command: admin show controller fabric plane all
     pattern:
       # 0     UP    UP             0         3
-      - '\s*\d\s+(?!UP)..\s+\w.\s+\d\s+\d\n'
-      - '\s*\d\s+\w.\s+(?!UP)..\s+\d\s+\d\n'
-#  - command: admin show controller fabric fsdb-pla rack 0
+      - '\s*\d\s+(?!UP)..\s+\w+\s+\d\s+\d\n'
+      - '\s*\d\s+\w+\s+(?!UP)..\s+\d\s+\d\n'
+  - command: admin show controller fabric fsdb-pla rack 0
+    pattern:
+      # 0,1(0/0/0)      11     11     11     11     11     11      4/4   48  68/68   816
+      - '\d\,\d\(\d\/\d\/\d\).*\..*\d\/\d\s+\d+\s+\d+\/\d+\s+\d+\n'
 #  - command: admin show controller fabric fsdb-pla rack 0 destination 0
 #  - command: admin show controller sfe driver
 #    location:
