@@ -189,45 +189,66 @@ commands:
   #      - "0/0/CPU0"
   #      - "0/1/CPU0"
   #      - "0/2/CPU0"
-  #  - command: "show controllers npu stats traps-all instance 0"
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
-  #    pattern:
-  #      - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
+  - command: show controllers npu stats traps-all instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      - '\s*\w+\s*(\(.*\))?\s+(\d+\s+){2}\w+\s+(\d+\s+){2}[1-9]([0-9*])*'
   #  - command: show controllers npu stats counters-all instance 0
   #    location:
   #      - "0/0/CPU0"
   #      - "0/1/CPU0"
   #      - "0/2/CPU0"
-  #  - command: "show controllers npu stats traps-all instance 1"
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
-  #    pattern:
-  #      - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
-  #  - command: show controllers npu stats counters-all instance 1
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
-  #  - command: show controllers fia driver
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
-  #  - command: show controllers fia link-info rx 0 35 flap instance 0
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
-  #  - command: show controllers fia link-info rx 0 35 flap instance 1
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
+  - command: show controllers npu stats traps-all instance 1
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      - '\s*\w+\s*(\(.*\))?\s+(\d+\s+){2}\w+\s+(\d+\s+){2}[1-9]([0-9*])*'
+  - command: show controllers npu stats counters-all instance 1
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      - '\w*(DISCARDED|DELETED|DSCRD|DROP)\w*\s*=\s*[1-9]([0-9*])*'
+  - command: show controllers fia driver
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      # | 0/0/0      |   0| 1| UP  | fia| UP  | UP  |NRML        |PON       |  1|  0|Fabric|
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*\d+\|){2}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){8}'
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*(\d+|\w+)\s*\|){4}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){6}'
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*(\d+|\w+)\s*\|){5}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){5}'
+  - command: show controllers fia link-info rx 0 35 flap instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      # 0/0/1/12           - UP            0        0       0       0
+      - '\d+\/\d+\/\d+\/\d+\s+-\s(?!UP)..(\s+\d+){4}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+[1-9+])(\s+\d+){3}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+\s+\d+(\s+[1-9+])(\s+\d+){2}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){2}(\s+[1-9+])\s+\d+'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){3}(\s+[1-9+])'
+  - command: show controllers fia link-info rx 0 35 flap instance 1
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      # 0/0/1/12           - UP            0        0       0       0
+      - '\d+\/\d+\/\d+\/\d+\s+-\s(?!UP)..(\s+\d+){4}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+[1-9+])(\s+\d+){3}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+\s+\d+(\s+[1-9+])(\s+\d+){2}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){2}(\s+[1-9+])\s+\d+'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){3}(\s+[1-9+])'
   #  - command: show controllers fia diagshell 0 "fabric reachability 0"
   #    location:
   #      - "0/0/CPU0"
