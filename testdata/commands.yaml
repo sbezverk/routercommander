@@ -160,9 +160,10 @@ commands:
   #  - command: show controllers npu stats voq ingress interface all instance all
   #    location:
   #      - "all"
-  #  - command: Show netio drops
-  #    location:
-  #      - "all"
+  - command: Show netio drops
+    pattern:
+      - "Interface:"
+      - '\w*(error|drop)\w*\s*:\s*[1-9]([0-9*])*'
   #  - command: show asic-errors all detail
   #    location:
   #      - "all"
@@ -171,9 +172,12 @@ commands:
   #      - "0/0/CPU0"
   #      - "0/1/CPU0"
   #      - "0/2/CPU0"
-  #  - command: show spp node-counters
-  #    location:
-  #      - "all"
+  - command: show spp node-counters
+    location:
+      - "all"
+    pattern:
+      - '\d\/(RP)?\d\/CPU[0-9]:'
+      - '\w*(ERROR|drop|DROP)\w*\s*:\s*[1-9]([0-9*])*'
   #  - command: show dpa resources all
   #    location:
   #      - "0/0/CPU0"
@@ -196,11 +200,13 @@ commands:
       - "0/2/CPU0"
     pattern:
       - '\s*\w+\s*(\(.*\))?\s+(\d+\s+){2}\w+\s+(\d+\s+){2}[1-9]([0-9*])*'
-  #  - command: show controllers npu stats counters-all instance 0
-  #    location:
-  #      - "0/0/CPU0"
-  #      - "0/1/CPU0"
-  #      - "0/2/CPU0"
+  - command: show controllers npu stats counters-all instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+    pattern:
+      - '\w*(DISCARDED|DELETED|DSCRD|DROP)\w*\s*=\s*[1-9]([0-9*])*'
   - command: show controllers npu stats traps-all instance 1
     location:
       - "0/0/CPU0"
