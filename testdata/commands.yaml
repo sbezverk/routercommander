@@ -151,15 +151,29 @@ commands:
   #  - command: show controllers npu diag dbal tablesinfo instance all
   #    location:
   #      - "all"
-  #  - command: show controllers npu resources all
-  #    location:
-  #      - "all"
-  #  - command: show controller fia stat instance all
-  #    location:
-  #      - "all"
-  #  - command: show controllers npu stats voq ingress interface all instance all
-  #    location:
-  #      - "all"
+  - command: show controllers npu resources all
+    location:
+      - "all"
+    pattern:
+      - "HW Resource Information For Location:"
+      - "NPU-[0-9]"
+      - '\s+(\w+[-]*\s*)+:\s+\w+\s+\([8-9]([0-9+])+\s*%\)'
+      - '\s+(\w+[-]*\s*)+:\s+\w+\s+\(100\s*%\)'
+  - command: show controller fia stat instance all
+    location:
+      - "all"
+    pattern:
+      - "Node ID:"
+      - '\w*(DELETE|DSCRD|DROP)\w*'
+  - command: show controllers npu stats voq ingress interface all instance all
+    location:
+      - "all"
+    pattern:
+      - 'Interface Name\s*='
+      - 'Location\s*='
+      # TC_0 = 11188056        3024728071      0               0
+      - '\s*TC_[0-9]\s*=(\s+\w+){2}\s+[1-9]([0-9*])*\s+\w+'
+      - '\s*TC_[0-9]\s*=(\s+\w+){3}\s+[1-9]([0-9*])*'
   - command: Show netio drops
     pattern:
       - "Interface:"
