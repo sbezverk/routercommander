@@ -90,12 +90,16 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 	}
 	// Making sure the output is not paged and at the same time attempting to find router's prompt
 	glog.Infof("sending \"term len 0\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "term len 0"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term len 0"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
 	}
 
 	glog.Infof("sending \"term width 256\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "term width 256"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term width 256"); err != nil {
+		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
+	}
+	glog.Infof("sending \"term len 0\"")
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "term len 0"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "term len 0", err)
 	}
 
@@ -104,7 +108,7 @@ func (r *router) CollectOutput(cmds *Commands) ([]byte, error) {
 	}
 
 	glog.Infof("sending \"exit\"")
-	if _, err := fmt.Fprintf(stdin, "%s\n", "exit"); err != nil {
+	if _, err := fmt.Fprintf(stdin, "%s\n\r", "exit"); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", "exit", err)
 	}
 

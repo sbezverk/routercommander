@@ -31,83 +31,84 @@ commands:
     pattern:
       # 0,1(0/0/0)      11     11     11     11     11     11      4/4   48  68/68   816
       - '\d\,\d\(\d\/\d\/\d\).*\..*\d\/\d\s+\d+\s+\d+\/\d+\s+\d+\n'
-  #  - command: admin show controller fabric fsdb-pla rack 0 destination 0
-  #  - command: admin show controller sfe driver
-  #    location:
-  #      - 0/FC0
-  #      - 0/FC1
-  #      - 0/FC2
-  #      - 0/FC3
-  #      - 0/FC4
-  #      - 0/FC5
-  #  - command: admin show reboot-history card
-  #    location:
-  #      - 0/FC0
-  #      - 0/FC1
-  #      - 0/FC2
-  #      - 0/FC3
-  #      - 0/FC4
-  #      - 0/FC5
-  #  - command: admin show controller sfe link-info rx 0 191 topo instance all
-  #    location:
-  #      - 0/FC0
-  #      - 0/FC1
-  #      - 0/FC2
-  #      - 0/FC3
-  #      - 0/FC4
-  #      - 0/FC5
-  #  - command: admin show asic-errors SFE all all
-  #    location:
-  #      - 0/FC0
-  #      - 0/FC1
-  #      - 0/FC2
-  #      - 0/FC3
-  #      - 0/FC4
-  #      - 0/FC5
-  #  - command: admin show controller sfe link-info rx 0 143 flap instance 0
-  #    location:
-  #      - 0/FC0
-  #      - 0/FC1
-  #      - 0/FC2
-  #      - 0/FC3
-  #      - 0/FC4
-  #      - 0/FC5
-  #  - command: admin show controller switch statistics
-  #    location:
-  #      - 0/SC0/EOBC-SW
-  #      - 0/SC1/EOBC-SW
-  #      - 0/SC0/EPC-SW
-  #      - 0/SC1/EPC-SW
-  #      - 0/LC0/LC-SW
-  #      - 0/LC1/LC-SW
-  #      - 0/LC2/LC-SW
-  #      - 0/LC3/LC-SW
-  #      - 0/FC0/FC-SW
-  #      - 0/FC1/FC-SW
-  #      - 0/FC2/FC-SW
-  #      - 0/FC3/FC-SW
-  #      - 0/FC4/FC-SW
-  #      - 0/FC5/FC-SW
-  #  - command: admin show environment fan
-  #  - command: admin show environment power
-  #  - command: admin show environment temp
-  #  - command: admin show led
-  #    location:
-  #      - 0/FT*
-  #      - 0/PM*
-  #      - 0/FC*
-  #      - 0/RP*
-  #  - command: admin show vm
-  #  - command: "show cef drops"
-  #    times: 5
-  #    interval: 10
-  #    location:
-  #      - "all"
-  #    pattern:
-  #      - "[dD][rR][oO][pP]"
-  #  - command: show platform
-  #    pattern:
-  #      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)]+)\s+){2})(?!.*IOS XR RUN|.*UP|.*OPERATIONAL)'
+  - command: admin show controller fabric fsdb-pla rack 0 destination 0
+  - command: admin show controller sfe driver
+    location:
+      - 0/FC0
+      - 0/FC1
+      - 0/FC2
+      - 0/FC3
+      - 0/FC4
+      - 0/FC5
+  - command: admin show reboot-history card
+    location:
+      - 0/FC0
+      - 0/FC1
+      - 0/FC2
+      - 0/FC3
+      - 0/FC4
+      - 0/FC5
+  - command: admin show controller sfe link-info rx 0 191 topo instance all
+    location:
+      - 0/FC0
+      - 0/FC1
+      - 0/FC2
+      - 0/FC3
+      - 0/FC4
+      - 0/FC5
+  - command: admin show asic-errors SFE all all
+    location:
+      - 0/FC0
+      - 0/FC1
+      - 0/FC2
+      - 0/FC3
+      - 0/FC4
+      - 0/FC5
+  - command: admin show controller sfe link-info rx 0 143 flap instance 0
+    location:
+      - 0/FC0
+      - 0/FC1
+      - 0/FC2
+      - 0/FC3
+      - 0/FC4
+      - 0/FC5
+  - command: admin show controller switch statistics
+    location:
+      - 0/SC0/EOBC-SW
+      - 0/SC1/EOBC-SW
+      - 0/SC0/EPC-SW
+      - 0/SC1/EPC-SW
+      - 0/LC0/LC-SW
+      - 0/LC1/LC-SW
+      - 0/LC2/LC-SW
+      - 0/LC3/LC-SW
+      - 0/FC0/FC-SW
+      - 0/FC1/FC-SW
+      - 0/FC2/FC-SW
+      - 0/FC3/FC-SW
+      - 0/FC4/FC-SW
+      - 0/FC5/FC-SW
+  - command: admin show environment fan
+  - command: admin show environment power
+  - command: admin show environment temp
+  - command: admin show led
+    location:
+      - 0/FT*
+      - 0/PM*
+      - 0/FC*
+      - 0/RP*
+  - command: admin show vm
+  - command: "show cef drops"
+    #    times: 5
+    #    interval: 10
+    location:
+      - "all"
+    pattern:
+      - "Node:"
+      - '\s+(?>\w+\s*)+:\s+[1-9]([0-9*])*'
+  - command: show platform
+    pattern:
+      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)]+)\s+){2})(?!.*IOS XR RUN|.*UP|.*OPERATIONAL)'
   #  - command: sh bun brief
   #    pattern:
   #      - '(\s+[dD][oO][wW][nN]\s+)+'
@@ -145,12 +146,12 @@ commands:
   #    pattern:
   #      - "Node ID:"
   #      - "(ERROR|DISCARD|RJCT|DSCRD|DELETED)"
-  #  - command: show controllers npu diag cos non instance all
-  #    location:
-  #      - "all"
-  #  - command: show controllers npu diag dbal tablesinfo instance all
-  #    location:
-  #      - "all"
+  - command: show controllers npu diag cos non instance all
+    location:
+      - "all"
+  - command: show controllers npu diag dbal tablesinfo instance all
+    location:
+      - "all"
   - command: show controllers npu resources all
     location:
       - "all"

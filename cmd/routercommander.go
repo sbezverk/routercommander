@@ -100,11 +100,28 @@ func main() {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
+	c := ssh.Config{}
+	c.SetDefaults()
+	c.KeyExchanges = append(
+		c.KeyExchanges,
+		"diffie-hellman-group-exchange-sha256",
+		"diffie-hellman-group-exchange-sha1",
+		"diffie-hellman-group1-sha1",
+	)
+	c.Ciphers = append(
+		c.Ciphers,
+		"aes128-cbc",
+		"aes192-cbc",
+		"aes256-cbc",
+		"3des-cbc")
+
 	sshConfig := &ssh.ClientConfig{
 		User: login,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(pass),
 		},
+		Config: c,
+
 		HostKeyCallback: remoteHostKeyCallback,
 	}
 
