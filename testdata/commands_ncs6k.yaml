@@ -1,0 +1,85 @@
+commands:
+  - command: show interface summary
+  - command: show im status  brie
+  - command: show controller fia driver location  all
+  - command: show controllers fia statistics detail instance all location all | exc 0
+  - command: show controllers fia link-info rx 0 35 topo instance all location all | exc "EN/UP"
+  - command: show controller fia driver location all
+  - command: show controllers slice all reset-history summary location 0/0/cpu0
+  - command: show controllers slice all reset-history summary location 0/1/cpu0
+  - command: show controllers slice all reset-history summary location 0/2/cpu0
+  - command: show controllers slice all reset-history summary location 0/3/cpu0
+  - command: show controllers slice all reset-history summary location 0/4/cpu0
+  - command: show controllers slice all reset-history summary location 0/4/cpu0
+  - command: show asic-errors all detail location 0/0/cpu0
+  - command: show asic-errors all detail location 0/1/cpu0
+  - command: show asic-errors all detail location 0/2/cpu0
+  - command: show asic-errors all detail location 0/3/cpu0
+  - command: show asic-errors all detail location 0/4/cpu0
+  - command: show asic-errors all detail location 0/5/cpu0
+  - command: show int summary
+  - command: show int br loc 0/0/cpu0
+  - command: show int br loc 0/1/cpu0
+  - command: show int br loc 0/2/cpu0
+  - command: show int br loc 0/3/cpu0
+  - command: show int br loc 0/4/cpu0
+  - command: show int br loc 0/5/cpu0
+  - command: show int br loc 0/6/cpu0
+  - command: show int br loc 0/7/cpu0
+  - command: show alarms brief
+  - command: show install active | i Pack
+  - command: show install commit | i Pack
+  - command: show install active
+  - command: show install commit
+  - command: show redundancy
+  - command: show health gsp
+  - command: show health sysdb
+  - command: show health cfgmgr
+  - command: show process blocked location all
+  - command: show running-config
+  - command: show logging
+  - command: show interface detail
+  - command: show interface accounting
+  - command: show route summary
+  - command: show platform
+  - command: show cmproxy inventory sdr-invmgr
+  - command: show context
+  - command: show watchdog memory-state location all
+  - command: show media
+  - command: show lpts ifib statistics
+  - command: show lpts ifib entry brief statistics
+  - command: show lpts ifib slices statistics
+  - command: admin show controller switch reachable
+  - command: admin show controller switch mlap reachable
+  - command: admin show controller switch summary
+  - command: admin show controller switch sfp summary
+  - command: admin show controller switch statistics detail
+  - command: admin show controller fabric plane all detail
+  - command: admin show controller fabric plane all statistics
+  - command: admin show controller fabric health
+  - command: admin show controller fabric fsdb-pla rack 0
+  - command: admin show controller fabric link port fia tx brief | exc "UP/UP"
+  - command: admin show vm
+  - command: admin show reboot-history
+  - command: admin show environment temperature
+  - command: admin show environment power
+  - command: admin show environment fan
+  - command: admin show platform
+  - command: admin show platform slices
+  - command: admin show card-inventory
+  - command: admin show node-inventory
+  - command: admin show system-service-inventory
+  - command: admin show rack-service-inventory
+  - command: admin show leader-statistics
+  - command: admin show sdr-inventory
+  - command: admin show rack-inventory
+  - command: admin show processes services all location all
+  - command: admin show sdr
+  - command: admin show sdr default-sdr reboot-history
+  - command: admin show controller switch
+  - command: admin show controller switch statistics detail
+  - command: admin show controller fabric health
+  - command: admin show controller fabric fsdb-pla rack 0
+  - command: admin show controller fabric plane all
+  - command: admin show controller fabric plane all  statistics detail
+  - command: admin show controller sfe driver rack 0
