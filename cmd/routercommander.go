@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/sbezverk/routercommander/pkg/log"
 	"github.com/sbezverk/routercommander/pkg/types"
 	"golang.org/x/crypto/ssh"
 )
@@ -22,6 +23,7 @@ var (
 	cmdFile string
 	login   string
 	pass    string
+	hc      bool
 )
 
 var wg sync.WaitGroup
@@ -33,6 +35,7 @@ func init() {
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
+	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
@@ -67,8 +70,18 @@ func getInfoFromFile(fn string) ([]string, error) {
 }
 
 func main() {
+	logo := `
+    +---------------------------------------------------+
+    | routercommander                  v0.0.1           |
+    | Developed and maintained by Serguei Bezverkhi     |
+    | sbezverk@cisco.com                                |
+    +---------------------------------------------------+
+`
+
 	flag.Parse()
 	_ = flag.Set("logtostderr", "true")
+
+	glog.Infof("\n%s\n", logo)
 
 	if login == "" || pass == "" {
 		glog.Error("--username and --password are mandatory parameters, exiting...")
@@ -95,55 +108,65 @@ func main() {
 		routers = append(routers, rtrName)
 	}
 
-	commands, err := types.GetCommands(cmdFile)
+	commands, err := types.GetCommands(cmdFile, hc)
 	if err != nil {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
-	sshConfig := &ssh.ClientConfig{
-		User: login,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(pass),
-		},
-		HostKeyCallback: remoteHostKeyCallback,
-	}
 
 	for _, router := range routers {
+		li, err := log.NewLogger(router)
+		if err != nil {
+			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
+			os.Exit(1)
+		}
+		r, err := types.NewRouter(router, sshConfig(), li)
+		if err != nil {
+			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
+			os.Exit(1)
+		}
 		wg.Add(1)
-		go collect(router, commands, sshConfig)
+		go collect(r, commands, hc)
 	}
 	wg.Wait()
 }
 
-func collect(rn string, commands *types.Commands, sshConfig *ssh.ClientConfig) {
+func collect(r types.Router, commands *types.Commands, hc bool) {
 	defer wg.Done()
-	glog.Infof("router name: %s", rn)
-	routerName := string(rn) + ":22"
-
-	router, err := types.NewRouter(routerName, sshConfig)
-	if err != nil {
-		glog.Errorf("Failed to instantiate router object with error: %+v", err)
-		return
-	}
-	defer router.Close()
-
-	result, err := router.CollectOutput(commands)
-	if err != nil {
-		glog.Errorf("failed to collect output on router: %s wirh error: %+v", rn, err)
-		if result != nil {
-			// In case of an error result carries stderr
-			glog.Errorf("stderr: %s", string(result))
+	glog.Infof("router name: %s", r.GetName())
+	for _, c := range commands.List {
+		if errs := r.ProcessCommand(c, hc); errs != nil {
+			glog.Errorf("router: %s encountered the following errors:", r.GetName())
+			for _, err := range errs {
+				glog.Errorf("\t - %+v", err)
+			}
+			return
 		}
-		return
 	}
-	// Saving result in the file
-	r, err := os.Create("./" + rn + ".log")
-	if err != nil {
-		glog.Errorf("failed to create log file for router %s with error: %+v", rn, err)
-		return
-	}
-	defer r.Close()
-	if _, err := r.Write(result); err != nil {
-		glog.Errorf("failed to write to log file for router %s with error: %+v", rn, err)
+}
+
+func sshConfig() *ssh.ClientConfig {
+	c := ssh.Config{}
+	c.SetDefaults()
+	c.KeyExchanges = append(
+		c.KeyExchanges,
+		"diffie-hellman-group-exchange-sha256",
+		"diffie-hellman-group-exchange-sha1",
+		"diffie-hellman-group1-sha1",
+	)
+	c.Ciphers = append(
+		c.Ciphers,
+		"aes128-cbc",
+		"aes192-cbc",
+		"aes256-cbc",
+		"3des-cbc")
+
+	return &ssh.ClientConfig{
+		User: login,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(pass),
+		},
+		Config:          c,
+		HostKeyCallback: remoteHostKeyCallback,
 	}
 }

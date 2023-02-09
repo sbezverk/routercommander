@@ -1,0 +1,55 @@
+commands:
+  - command: admin show environment all
+#  - command: admin show controller sfe link-info rx 0 191 topo instance all
+#    location:
+#      - 0/FC0
+#  - command: admin show asic-errors SFE all all
+#    location:
+#      - 0/FC0
+#  - command: admin show controller switch statistics
+#    location:
+#      - 0/SC0/EOBC-SW
+#  - command: "show cef drops"
+#    times: 5
+#    interval: 10
+#    location:
+#      - "all"
+#    pattern:
+#      - "[dD][rR][oO][pP]"
+#  - command: show platform
+#    pattern:
+#      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)]+)\s+){2})(?!.*IOS XR RUN|.*UP|.*OPERATIONAL)'
+#  - command: sh bun brief
+#    pattern:
+#      - '(\s+[dD][oO][wW][nN]\s+)+'
+#  - command: sh int brief
+#    pattern:
+#      - '(\s+[dD][oO][wW][nN]\s+)+'
+#  - command: sh mpls traffic-eng tunnels summary
+#  - command: sh mpls traffic-eng tunnels detail
+#    pattern:
+#      - '^\s*Name:\s+((?:([a-zA-Z_\-0-9\/\(\)]+)\s+))Destination:\s*((?:[0-9]{1,3}\.){3}[0-9]{1,3})'
+#      - '(\s+[dD][oO][wW][nN]\s+)+'
+#  - command: sh rsvp interface
+#  - command: sh bfd summary
+#  - command: sh bfd session
+#    pattern:
+#      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)\.\*]+)\s+){4})(?!.*UP)'
+#  - command: sh bfd session detail
+#  - command: sh drops-all
+#    location:
+#      - "all"
+#  - command: show lpts pifib hardware entry brief
+#    location:
+#      - "all"
+#    pattern:
+#      - '(\s)*Node:(\s)*[0-9]\/[0-9]\/CPU[0-9]'
+#      - '(([a-zA-Z_\-0-9]+)\s+){15}[1-9].*'
+#  - command: 'show controllers fia diagshell 0 "diag counter g"'
+#    location:
+#      - "0/0/CPU0"
+#      - "0/1/CPU0"
+#      - "0/2/CPU0"
+#    pattern:
+#      - "Node ID:"
+#      - "(ERROR|DISCARD|RJCT|DSCRD|DELETED)"

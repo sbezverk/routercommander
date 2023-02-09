@@ -1,3 +1,6 @@
+REGISTRY_NAME?=docker.io/sbezverk
+IMAGE_VERSION?=v0.0.0
+
 .PHONY: all routercommander-mac routercommander clean test
 
 ifdef V
@@ -19,6 +22,13 @@ routercommander-mac:
 routercommander-win:
 	mkdir -p bin
 	$(MAKE) -C ./cmd compile-routercommander-win
+
+routercommander-container: routercommander
+	docker build -t $(REGISTRY_NAME)/routercommander:$(IMAGE_VERSION) -f ./build/Dockerfile.routercommander .
+
+push-routercommander: routercommander-container
+	docker push $(REGISTRY_NAME)/routercommander:$(IMAGE_VERSION)
+
 clean:
 	rm -rf bin
 

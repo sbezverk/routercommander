@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/golang/glog v1.0.0
-	golang.org/x/crypto v0.0.0-20220314234724-5d542ad81a58
+	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064
 	gopkg.in/yaml.v2 v2.4.0
 )
 

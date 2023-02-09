@@ -1,8 +1,36 @@
 commands:
   - command: admin show environment all
+    pattern:
+      #  0/0          NC55-36X100G-A-SE     1050         511       ON
+      - '(\s*\d\/(FT|FC)?\d)\s+([a-zA-Z\-0-9]+)\s+(\d+\s+){2}\w(?!N).*\n'
+        # 0/PM0       3kW-AC      211.7      3.3     12.0     52.5    OK
+      - '(\s*\d\/PM\d)\s+([a-zA-Z\-0-9]+)\s+(\d+\.*\d*\s+){4}\w(?!K).*\n'
+        # FAN0             7935
+      - 'FAN[0-9]\s+((?![1-9]).)*\n'
   - command: admin show controller fabric health
+    pattern:
+      #     |FSDB status|Ok|
+      - '\s*\|FSDB status\s*\|\s*(?!Ok)..\n'
+      #     |SFE status  |  Ok |  Ok |  Ok |  Ok |  Ok |  Ok |
+      - '\s*\|SFE status\s*\|\s+(?!Ok)..\s*\|(\s+\w+\s+\|){5}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|)\s+(?!Ok)..\s*\|(\s+\w+\s+\|){4}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){2}\s+(?!Ok)..\s*\|(\s+\w+\s+\|){3}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){3}\s+(?!Ok)..\s*\|(\s+\w+\s+\|){2}\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){4}\s+(?!Ok)..\s*\|(\s+\w+\s+\|)\n'
+      - '\s*\|SFE status\s*\|(\s+\w+\s+\|){5}\s+(?!Ok)..\s*\|\n'
+      #     0     UP    UP       0        Yes
+      - '\s*\d\s+(?!UP)..\s+\w+\s+\d\s+\w+\s*\n'
+      - '\s*\d\s+\w+\s+(?!UP)..\s+\d\s+\w+\s*\n'
+      - '\s*\d\s+\w+\s+\w+\s+[1-9][0-9]*\s+\w+\s*\n'
   - command: admin show controller fabric plane all
+    pattern:
+      # 0     UP    UP             0         3
+      - '\s*\d\s+(?!UP)..\s+\w+\s+\d\s+\d\n'
+      - '\s*\d\s+\w+\s+(?!UP)..\s+\d\s+\d\n'
   - command: admin show controller fabric fsdb-pla rack 0
+    pattern:
+      # 0,1(0/0/0)      11     11     11     11     11     11      4/4   48  68/68   816
+      - '\d\,\d\(\d\/\d\/\d\).*\..*\d\/\d\s+\d+\s+\d+\/\d+\s+\d+\n'
   - command: admin show controller fabric fsdb-pla rack 0 destination 0
   - command: admin show controller sfe driver
     location:
@@ -76,47 +104,48 @@ commands:
     location:
       - "all"
     pattern:
-      - "[dD][rR][oO][pP]"
+      - "Node:"
+      - '\s+(?>\w+\s*)+:\s+[1-9]([0-9*])*'
   - command: show platform
     pattern:
       - '^(?:(?:([a-zA-Z_\-0-9\/\(\)]+)\s+){2})(?!.*IOS XR RUN|.*UP|.*OPERATIONAL)'
-  - command: sh bun brief
-    pattern:
-      - '(\s+[dD][oO][wW][nN]\s+)+'
-  - command: sh ospf interface brief
-  - command: sh int brief
-    pattern:
-      - '(\s+[dD][oO][wW][nN]\s+)+'
-  - command: sh mpls ldp interface brief
-  - command: sh mpls ldp neighbor brief
-  - command: sh mpls traffic-eng tunnels summary
-  - command: sh mpls traffic-eng tunnels detail
-    pattern:
-      - '^\s*Name:\s+((?:([a-zA-Z_\-0-9\/\(\)]+)\s+))Destination:\s*((?:[0-9]{1,3}\.){3}[0-9]{1,3})'
-      - '(\s+[dD][oO][wW][nN]\s+)+'
-  - command: sh rsvp interface
-  - command: sh bfd summary
-  - command: sh bfd session
-    pattern:
-      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)\.\*]+)\s+){4})(?!.*UP)'
-  - command: sh bfd session detail
-  - command: sh drops-all
-    location:
-      - "all"
-  - command: show lpts pifib hardware entry brief
-    location:
-      - "all"
-    pattern:
-      - '(\s)*Node:(\s)*[0-9]\/[0-9]\/CPU[0-9]'
-      - '(([a-zA-Z_\-0-9]+)\s+){15}[1-9].*'
-  - command: 'show controllers fia diagshell 0 "diag counter g"'
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
-    pattern:
-      - "Node ID:"
-      - "(ERROR|DISCARD|RJCT|DSCRD|DELETED)"
+  #  - command: sh bun brief
+  #    pattern:
+  #      - '(\s+[dD][oO][wW][nN]\s+)+'
+  #  - command: sh ospf interface brief
+  #  - command: sh int brief
+  #    pattern:
+  #      - '(\s+[dD][oO][wW][nN]\s+)+'
+  #  - command: sh mpls ldp interface brief
+  #  - command: sh mpls ldp neighbor brief
+  #  - command: sh mpls traffic-eng tunnels summary
+  #  - command: sh mpls traffic-eng tunnels detail
+  #    pattern:
+  #      - '^\s*Name:\s+((?:([a-zA-Z_\-0-9\/\(\)]+)\s+))Destination:\s*((?:[0-9]{1,3}\.){3}[0-9]{1,3})'
+  #      - '(\s+[dD][oO][wW][nN]\s+)+'
+  #  - command: sh rsvp interface
+  #  - command: sh bfd summary
+  #  - command: sh bfd session
+  #    pattern:
+  #      - '^(?:(?:([a-zA-Z_\-0-9\/\(\)\.\*]+)\s+){4})(?!.*UP)'
+  #  - command: sh bfd session detail
+  #  - command: sh drops-all
+  #    location:
+  #      - "all"
+  #  - command: show lpts pifib hardware entry brief
+  #    location:
+  #      - "all"
+  #    pattern:
+  #      - '(\s)*Node:(\s)*[0-9]\/[0-9]\/CPU[0-9]'
+  #      - '(([a-zA-Z_\-0-9]+)\s+){15}[1-9].*'
+  #  - command: 'show controllers fia diagshell 0 "diag counter g"'
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
+  #    pattern:
+  #      - "Node ID:"
+  #      - "(ERROR|DISCARD|RJCT|DSCRD|DELETED)"
   - command: show controllers npu diag cos non instance all
     location:
       - "all"
@@ -126,92 +155,140 @@ commands:
   - command: show controllers npu resources all
     location:
       - "all"
+    pattern:
+      - "HW Resource Information For Location:"
+      - "NPU-[0-9]"
+      - '\s+(\w+[-]*\s*)+:\s+\w+\s+\([8-9]([0-9+])+\s*%\)'
+      - '\s+(\w+[-]*\s*)+:\s+\w+\s+\(100\s*%\)'
   - command: show controller fia stat instance all
     location:
       - "all"
+    pattern:
+      - "Node ID:"
+      - '\w*(DELETE|DSCRD|DROP)\w*'
   - command: show controllers npu stats voq ingress interface all instance all
     location:
       - "all"
+    pattern:
+      - 'Interface Name\s*='
+      - 'Location\s*='
+      # TC_0 = 11188056        3024728071      0               0
+      - '\s*TC_[0-9]\s*=(\s+\w+){2}\s+[1-9]([0-9*])*\s+\w+'
+      - '\s*TC_[0-9]\s*=(\s+\w+){3}\s+[1-9]([0-9*])*'
   - command: Show netio drops
-    location:
-      - "all"
-  - command: show asic-errors all detail
-    location:
-      - "all"
-  - command: show captured packets ingress hexdump
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
+    pattern:
+      - "Interface:"
+      - '\w*(error|drop)\w*\s*:\s*[1-9]([0-9*])*'
+  #  - command: show asic-errors all detail
+  #    location:
+  #      - "all"
+  #  - command: show captured packets ingress hexdump
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
   - command: show spp node-counters
     location:
       - "all"
-  - command: show dpa resources all
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
-  - command: show asic-errors fia 0 all
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
-  - command: show asic-errors fia 1 all
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
-  - command: "show controllers npu stats traps-all instance 0"
+    pattern:
+      - '\d\/(RP)?\d\/CPU[0-9]:'
+      - '\w*(ERROR|drop|DROP)\w*\s*:\s*[1-9]([0-9*])*'
+  #  - command: show dpa resources all
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
+  #  - command: show asic-errors fia 0 all
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
+  #  - command: show asic-errors fia 1 all
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
+  - command: show controllers npu stats traps-all instance 0
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
     pattern:
-      - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
+      - '\s*\w+\s*(\(.*\))?\s+(\d+\s+){2}\w+\s+(\d+\s+){2}[1-9]([0-9*])*'
   - command: show controllers npu stats counters-all instance 0
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
-  - command: "show controllers npu stats traps-all instance 1"
+    pattern:
+      - '\w*(DISCARDED|DELETED|DSCRD|DROP)\w*\s*=\s*[1-9]([0-9*])*'
+  - command: show controllers npu stats traps-all instance 1
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
     pattern:
-      - '^\s*(\w+\s*(\(([a-zA-Z_\-0-9]+\s*)+\))?\s+)(\w+\s+){5}[1-9.]+\s*$'
+      - '\s*\w+\s*(\(.*\))?\s+(\d+\s+){2}\w+\s+(\d+\s+){2}[1-9]([0-9*])*'
   - command: show controllers npu stats counters-all instance 1
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
+    pattern:
+      - '\w*(DISCARDED|DELETED|DSCRD|DROP)\w*\s*=\s*[1-9]([0-9*])*'
   - command: show controllers fia driver
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
+    pattern:
+      # | 0/0/0      |   0| 1| UP  | fia| UP  | UP  |NRML        |PON       |  1|  0|Fabric|
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*\d+\|){2}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){8}'
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*(\d+|\w+)\s*\|){4}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){6}'
+      - '\|\s*\d+\/\d+\/\d+\s*\|(\s*(\d+|\w+)\s*\|){5}\s*(?!UP)..\s*\|(\s*(\d+|\w*)\s*\|){5}'
   - command: show controllers fia link-info rx 0 35 flap instance 0
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
+    pattern:
+      # 0/0/1/12           - UP            0        0       0       0
+      - '\d+\/\d+\/\d+\/\d+\s+-\s(?!UP)..(\s+\d+){4}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+[1-9+])(\s+\d+){3}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+\s+\d+(\s+[1-9+])(\s+\d+){2}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){2}(\s+[1-9+])\s+\d+'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){3}(\s+[1-9+])'
   - command: show controllers fia link-info rx 0 35 flap instance 1
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
-  - command: show controllers fia diagshell 0 "fabric reachability 0"
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
-  - command: show controllers fia diagshell 1 "fabric reachability 0"
-    location:
-      - "0/0/CPU0"
-      - "0/1/CPU0"
-      - "0/2/CPU0"
+    pattern:
+      # 0/0/1/12           - UP            0        0       0       0
+      - '\d+\/\d+\/\d+\/\d+\s+-\s(?!UP)..(\s+\d+){4}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+[1-9+])(\s+\d+){3}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+\s+\d+(\s+[1-9+])(\s+\d+){2}'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){2}(\s+[1-9+])\s+\d+'
+      - '\d+\/\d+\/\d+\/\d+\s+-\s\w+(\s+\d+){3}(\s+[1-9+])'
+  #  - command: show controllers fia diagshell 0 "fabric reachability 0"
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
+  #  - command: show controllers fia diagshell 1 "fabric reachability 0"
+  #    location:
+  #      - "0/0/CPU0"
+  #      - "0/1/CPU0"
+  #      - "0/2/CPU0"
   - command: show logging
   - command: show interfaces
+    pattern:
+      - '\, line protocol'
+      - "input rate"
+      - "output rate"
+      - "error"
+      - "drop"
+      - "failure"
   - command: show install active
   - command: sh users
   - command: admin show running
