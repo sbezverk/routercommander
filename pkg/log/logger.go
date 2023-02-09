@@ -53,9 +53,9 @@ func (l logger) worker() {
 	}
 }
 
-func NewLogger() (Logger, error) {
+func NewLogger(prefix string) (Logger, error) {
 	ts := strings.Replace(time.Now().Format("2006-01-02_15:04:05"), " ", "_", -1)
-	fileName := "./logs/pathchecker" + "_" + ts + ".log"
+	fileName := "./logs/" + prefix + "_" + ts + ".log"
 	f, err := os.Create(fileName)
 	if err != nil {
 

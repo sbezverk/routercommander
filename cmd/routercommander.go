@@ -103,7 +103,7 @@ func main() {
 	}
 
 	for _, router := range routers {
-		li, err := log.NewLogger()
+		li, err := log.NewLogger(router)
 		if err != nil {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
 			os.Exit(1)
