@@ -70,8 +70,18 @@ func getInfoFromFile(fn string) ([]string, error) {
 }
 
 func main() {
+	logo := `
+    +---------------------------------------------------+
+    | routercommander                  v0.0.1           |
+    | Developed and maintained by Serguei Bezverkhi     |
+    | sbezverk@cisco.com                                |
+    +---------------------------------------------------+
+`
+
 	flag.Parse()
 	_ = flag.Set("logtostderr", "true")
+
+	glog.Infof("\n%s\n", logo)
 
 	if login == "" || pass == "" {
 		glog.Error("--username and --password are mandatory parameters, exiting...")
@@ -98,7 +108,7 @@ func main() {
 		routers = append(routers, rtrName)
 	}
 
-	commands, err := types.GetCommands(cmdFile)
+	commands, err := types.GetCommands(cmdFile, hc)
 	if err != nil {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)

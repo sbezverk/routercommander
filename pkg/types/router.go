@@ -29,48 +29,35 @@ func (r *router) GetName() string {
 }
 
 type cmdResult struct {
-	cmd     string
-	result  []byte
-	pattern []string
+	cmd    string
+	result []byte
 }
 
 func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 	c := cmd.Cmd
-	results := make([]*cmdResult, 0)
 	var errs []error
+	results := make([]*cmdResult, 0)
 	if len(cmd.Location) == 0 {
-		b, err := r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		var err error
+		rs, err := r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
 		if err != nil {
 			return []error{err}
 		}
-		results = append(results, &cmdResult{
-			cmd:     c,
-			result:  b,
-			pattern: cmd.Pattern,
-		})
+		results = append(results, rs...)
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
-			b, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			rs, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
 			if err != nil {
 				return []error{err}
 			}
-			results = append(results, &cmdResult{
-				cmd:     fc,
-				result:  b,
-				pattern: cmd.Pattern,
-			})
+			results = append(results, rs...)
 		}
 	}
 	if hc {
 		for _, r := range results {
-			for _, p := range r.pattern {
-				sp, err := regexp.Compile(p)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-				if i := sp.FindIndex(r.result); i != nil {
+			for _, p := range cmd.RegExp {
+				if i := p.FindIndex(r.result); i != nil {
 					errs = append(errs, fmt.Errorf("found matching line: %q, command: %q", strings.Trim(string(r.result[i[0]:i[1]]), "\n\r\t"), r.cmd))
 				}
 			}
@@ -80,7 +67,7 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 	return errs
 }
 
-func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]byte, error) {
+func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
 			glog.Infof("Sending command: %s", cmd)
@@ -89,21 +76,33 @@ func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([
 		}
 	}
 	if interval == 0 || times == 0 {
-		return r.GetData(cmd, debug)
-	}
-	b := make([]byte, 0)
-	ticker := time.NewTicker(time.Second * time.Duration(interval))
-	defer ticker.Stop()
-	for t := 0; t < times; t++ {
-		buff, err := r.GetData(cmd, debug)
+		b, err := r.GetData(cmd, debug)
 		if err != nil {
 			return nil, err
 		}
-		b = append(b, buff...)
+		return []*cmdResult{
+			{
+				cmd:    cmd,
+				result: b,
+			},
+		}, err
+	}
+	results := make([]*cmdResult, 0)
+	ticker := time.NewTicker(time.Second * time.Duration(interval))
+	defer ticker.Stop()
+	for t := 0; t < times; t++ {
+		b, err := r.GetData(cmd, debug)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, &cmdResult{
+			cmd:    cmd,
+			result: b,
+		})
 		<-ticker.C
 	}
 
-	return b, nil
+	return results, nil
 }
 
 var _ Router = &router{}

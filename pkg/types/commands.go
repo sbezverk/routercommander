@@ -3,11 +3,12 @@ package types
 import (
 	"fmt"
 	"os"
+	"regexp"
 
 	"gopkg.in/yaml.v2"
 )
 
-func GetCommands(fn string) (*Commands, error) {
+func GetCommands(fn string, hc bool) (*Commands, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
@@ -26,6 +27,18 @@ func GetCommands(fn string) (*Commands, error) {
 	}
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("fail tp unmarshal commands yaml file %s with error: %+v", fn, err)
+	}
+	// Compile Regular Expressions only if Health Check is requested
+	if hc {
+		for _, cmd := range c.List {
+			cmd.RegExp = make([]*regexp.Regexp, len(cmd.Pattern))
+			for i, p := range cmd.Pattern {
+				cmd.RegExp[i], err = regexp.Compile(p)
+				if err != nil {
+					return nil, fmt.Errorf("fail to compile regular expression %q with error: %+v", p, err)
+				}
+			}
+		}
 	}
 
 	return c, nil
