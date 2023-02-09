@@ -71,7 +71,7 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 					continue
 				}
 				if i := sp.FindIndex(r.result); i != nil {
-					errs = append(errs, fmt.Errorf("line: %s matched by pattern: %s found in command: %s", string(r.result[i[0]:i[1]]), sp.String(), r.cmd))
+					errs = append(errs, fmt.Errorf("found matching line: %q, command: %q", strings.Trim(string(r.result[i[0]:i[1]]), "\n\r\t"), r.cmd))
 				}
 			}
 		}
