@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"github.com/sbezverk/routercommander/pkg/log"
 	"github.com/sbezverk/routercommander/pkg/types"
 	"golang.org/x/crypto/ssh"
 )
@@ -100,6 +101,33 @@ func main() {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
+
+	for _, router := range routers {
+		wg.Add(1)
+
+		li, err := log.NewLogger()
+		if err != nil {
+			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
+			os.Exit(1)
+		}
+		r, err := types.NewRouter(router, sshConfig(), li)
+		if err != nil {
+			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
+			os.Exit(1)
+		}
+
+		go collect(r, commands)
+	}
+	wg.Wait()
+}
+
+func collect(r types.Router, commands *types.Commands) {
+	defer wg.Done()
+	glog.Infof("router name: %s", r.GetName())
+
+}
+
+func sshConfig() *ssh.ClientConfig {
 	c := ssh.Config{}
 	c.SetDefaults()
 	c.KeyExchanges = append(
@@ -115,52 +143,12 @@ func main() {
 		"aes256-cbc",
 		"3des-cbc")
 
-	sshConfig := &ssh.ClientConfig{
+	return &ssh.ClientConfig{
 		User: login,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(pass),
 		},
-		Config: c,
-
+		Config:          c,
 		HostKeyCallback: remoteHostKeyCallback,
-	}
-
-	for _, router := range routers {
-		wg.Add(1)
-		go collect(router, commands, sshConfig)
-	}
-	wg.Wait()
-}
-
-func collect(rn string, commands *types.Commands, sshConfig *ssh.ClientConfig) {
-	defer wg.Done()
-	glog.Infof("router name: %s", rn)
-	routerName := string(rn) + ":22"
-
-	router, err := types.NewRouter(routerName, sshConfig)
-	if err != nil {
-		glog.Errorf("Failed to instantiate router object with error: %+v", err)
-		return
-	}
-	defer router.Close()
-
-	result, err := router.CollectOutput(commands)
-	if err != nil {
-		glog.Errorf("failed to collect output on router: %s wirh error: %+v", rn, err)
-		if result != nil {
-			// In case of an error result carries stderr
-			glog.Errorf("stderr: %s", string(result))
-		}
-		return
-	}
-	// Saving result in the file
-	r, err := os.Create("./" + rn + ".log")
-	if err != nil {
-		glog.Errorf("failed to create log file for router %s with error: %+v", rn, err)
-		return
-	}
-	defer r.Close()
-	if _, err := r.Write(result); err != nil {
-		glog.Errorf("failed to write to log file for router %s with error: %+v", rn, err)
 	}
 }
