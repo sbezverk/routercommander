@@ -20,7 +20,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
-	ProcessCommand(cmd *ShowCommand) ([]byte, error)
+	ProcessCommand(cmd *ShowCommand, hc bool) []error
 	Close()
 }
 
@@ -28,26 +28,56 @@ func (r *router) GetName() string {
 	return r.name
 }
 
-func (r *router) ProcessCommand(cmd *ShowCommand) ([]byte, error) {
+type cmdResult struct {
+	cmd     string
+	result  []byte
+	pattern []string
+}
+
+func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 	c := cmd.Cmd
-	b := make([]byte, 0)
-	var err error
+	results := make([]*cmdResult, 0)
+	var errs []error
 	if len(cmd.Location) == 0 {
-		b, err = r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		b, err := r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
 		if err != nil {
-			return nil, err
+			return []error{err}
 		}
+		results = append(results, &cmdResult{
+			cmd:     c,
+			result:  b,
+			pattern: cmd.Pattern,
+		})
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
-			buff, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			b, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
 			if err != nil {
-				return nil, err
+				return []error{err}
 			}
-			b = append(b, buff...)
+			results = append(results, &cmdResult{
+				cmd:     fc,
+				result:  b,
+				pattern: cmd.Pattern,
+			})
 		}
 	}
-	return b, nil
+	if hc {
+		for _, r := range results {
+			for _, p := range r.pattern {
+				sp, err := regexp.Compile(p)
+				if err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				if sp.FindIndex(r.result) != nil {
+					errs = append(errs, fmt.Errorf("match for patter %s found in command %s", sp.String(), r.cmd))
+				}
+			}
+		}
+	}
+
+	return errs
 }
 
 func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]byte, error) {
@@ -68,6 +98,8 @@ func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([
 
 	return b, nil
 }
+
+var _ Router = &router{}
 
 type router struct {
 	name      string

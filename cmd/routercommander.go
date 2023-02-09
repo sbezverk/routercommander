@@ -23,6 +23,7 @@ var (
 	cmdFile string
 	login   string
 	pass    string
+	hc      bool
 )
 
 var wg sync.WaitGroup
@@ -34,6 +35,7 @@ func init() {
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
+	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
@@ -114,17 +116,16 @@ func main() {
 			os.Exit(1)
 		}
 		wg.Add(1)
-		go collect(r, commands)
+		go collect(r, commands, hc)
 	}
 	wg.Wait()
 }
 
-func collect(r types.Router, commands *types.Commands) {
+func collect(r types.Router, commands *types.Commands, hc bool) {
 	defer wg.Done()
 	glog.Infof("router name: %s", r.GetName())
 	for _, c := range commands.List {
-		_, err := r.ProcessCommand(c)
-		if err != nil {
+		if err := r.ProcessCommand(c, hc); err != nil {
 			glog.Errorf("router: %s failed to process command: %s with error: %+v", r.GetName(), c.Cmd, err)
 			return
 		}
