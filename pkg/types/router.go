@@ -69,10 +69,11 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 
 func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
 	if glog.V(5) {
+		rn := strings.TrimSuffix(r.GetName(), ":22")
 		if interval == 0 || times == 0 {
-			glog.Infof("Sending command: %s", cmd)
+			glog.Infof("Sending command: %q to router: %q", cmd, rn)
 		} else {
-			glog.Infof("Sending command: %s %d times with interval of %d seconds", cmd, times, interval)
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, rn)
 		}
 	}
 	if interval == 0 || times == 0 {
@@ -133,7 +134,7 @@ func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
 
 func NewRouter(rn string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
 	routerName := string(rn) + ":22"
-	glog.Infof("Successfully dialed router: %s", routerName)
+	glog.Infof("Successfully dialed router: %s", rn)
 	r := &router{
 		name:      routerName,
 		sshConfig: sshConfig,

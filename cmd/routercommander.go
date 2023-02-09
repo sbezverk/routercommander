@@ -39,7 +39,7 @@ func init() {
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	glog.Infof("Callback is called with hostname: %s remote address: %s", hostname, remote.String())
+	glog.Infof("Callback is called with hostname: %s remote address: %s", strings.TrimSuffix(hostname, ":22"), remote.String())
 	return nil
 }
 
@@ -133,10 +133,11 @@ func main() {
 
 func collect(r types.Router, commands *types.Commands, hc bool) {
 	defer wg.Done()
-	glog.Infof("router name: %s", r.GetName())
+	rn := strings.TrimSuffix(r.GetName(), ":22")
+	glog.Infof("router: %s", rn)
 	for _, c := range commands.List {
 		if errs := r.ProcessCommand(c, hc); errs != nil {
-			glog.Errorf("router: %s encountered the following errors:", r.GetName())
+			glog.Errorf("router: %s encountered the following errors:", rn)
 			for _, err := range errs {
 				glog.Errorf("\t - %+v", err)
 			}
