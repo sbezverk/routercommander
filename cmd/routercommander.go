@@ -125,8 +125,11 @@ func collect(r types.Router, commands *types.Commands, hc bool) {
 	defer wg.Done()
 	glog.Infof("router name: %s", r.GetName())
 	for _, c := range commands.List {
-		if err := r.ProcessCommand(c, hc); err != nil {
-			glog.Errorf("router: %s failed to process command: %s with error: %+v", r.GetName(), c.Cmd, err)
+		if errs := r.ProcessCommand(c, hc); errs != nil {
+			glog.Errorf("router: %s encountered the following errors:", r.GetName())
+			for _, err := range errs {
+				glog.Errorf("\t - %+v", err)
+			}
 			return
 		}
 	}
