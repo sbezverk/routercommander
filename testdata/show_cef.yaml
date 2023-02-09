@@ -1,11 +1,4 @@
 commands:
-  #- command: show cef drops
-  #   times: 2
-  #   interval: 10
-  #    location:
-  #      - "all"
-  #    pattern:
-  #      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
   - command: show cef drops
     times: 2
     interval: 10
@@ -15,3 +8,4 @@ commands:
       - "0/2/CPU0"
     pattern:
       - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    debug: true

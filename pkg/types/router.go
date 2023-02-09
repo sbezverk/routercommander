@@ -20,6 +20,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
+	ProcessCommand(cmd *ShowCommand) ([]byte, error)
 	Close()
 }
 
@@ -27,49 +28,46 @@ func (r *router) GetName() string {
 	return r.name
 }
 
-// func (r *router) sendCommands(stdin io.WriteCloser, list []*ShowCommand) error {
-// 	// send the commands
-// 	for _, cmd := range list {
-// 		c := cmd.Cmd
-// 		if len(cmd.Location) == 0 {
-// 			if err := sendShowCommand(stdin, c, cmd.Times, cmd.Interval); err != nil {
-// 				return err
-// 			}
-// 			continue
-// 		}
-// 		for _, l := range cmd.Location {
-// 			fc := c + " " + "location " + l
-// 			if err := sendShowCommand(stdin, fc, cmd.Times, cmd.Interval); err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
+func (r *router) ProcessCommand(cmd *ShowCommand) ([]byte, error) {
+	c := cmd.Cmd
+	b := make([]byte, 0)
+	var err error
+	if len(cmd.Location) == 0 {
+		b, err = r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		for _, l := range cmd.Location {
+			fc := c + " " + "location " + l
+			buff, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			if err != nil {
+				return nil, err
+			}
+			b = append(b, buff...)
+		}
+	}
+	return b, nil
+}
 
-// 	return nil
-// }
+func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]byte, error) {
+	if interval == 0 || times == 0 {
+		return r.GetData(cmd, debug)
+	}
+	b := make([]byte, 0)
+	ticker := time.NewTicker(time.Second * time.Duration(interval))
+	defer ticker.Stop()
+	for t := 0; t < times; t++ {
+		buff, err := r.GetData(cmd, debug)
+		if err != nil {
+			return nil, err
+		}
+		b = append(b, buff...)
+		<-ticker.C
+	}
 
-// func sendShowCommand(stdin io.WriteCloser, cmd string, times, interval int) error {
-// 	switch {
-// 	case interval == 0 || times == 0:
-// 		glog.Infof("sending \"%s\"", cmd)
-// 		if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
-// 			return fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)
-// 		}
-// 		return nil
-// 	default:
-// 		glog.Infof("sending \"%s\" %d times with interval %d seconds", cmd, times, interval)
-// 		ticker := time.NewTicker(time.Second * time.Duration(interval))
-// 		defer ticker.Stop()
-// 		for t := 0; t < times; t++ {
-// 			if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
-// 				return fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)
-// 			}
-// 			<-ticker.C
-// 		}
-// 	}
-
-// 	return nil
-// }
+	return b, nil
+}
 
 type router struct {
 	name      string

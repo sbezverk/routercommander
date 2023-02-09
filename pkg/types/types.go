@@ -6,6 +6,7 @@ type ShowCommand struct {
 	Interval int      `yaml:"interval"`
 	Location []string `yaml:"location"`
 	Pattern  []string `yaml:"pattern"`
+	Debug    bool     `yaml:"debug"`
 }
 
 type Commands struct {

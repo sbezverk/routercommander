@@ -103,8 +103,6 @@ func main() {
 	}
 
 	for _, router := range routers {
-		wg.Add(1)
-
 		li, err := log.NewLogger()
 		if err != nil {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
@@ -115,7 +113,7 @@ func main() {
 			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
 			os.Exit(1)
 		}
-
+		wg.Add(1)
 		go collect(r, commands)
 	}
 	wg.Wait()
@@ -124,7 +122,13 @@ func main() {
 func collect(r types.Router, commands *types.Commands) {
 	defer wg.Done()
 	glog.Infof("router name: %s", r.GetName())
-
+	for _, c := range commands.List {
+		_, err := r.ProcessCommand(c)
+		if err != nil {
+			glog.Errorf("router: %s failed to process command: %s with error: %+v", r.GetName(), c.Cmd, err)
+			return
+		}
+	}
 }
 
 func sshConfig() *ssh.ClientConfig {
