@@ -81,6 +81,13 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 }
 
 func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]byte, error) {
+	if glog.V(5) {
+		if interval == 0 || times == 0 {
+			glog.Infof("Sending command: %s", cmd)
+		} else {
+			glog.Infof("Sending command: %s %d times with interval of %d seconds", cmd, times, interval)
+		}
+	}
 	if interval == 0 || times == 0 {
 		return r.GetData(cmd, debug)
 	}
