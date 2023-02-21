@@ -8,4 +8,4 @@ commands:
       - "0/2/CPU0"
     pattern:
       - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
-    debug: true
+    debug: false 
