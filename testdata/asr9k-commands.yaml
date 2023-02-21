@@ -1,0 +1,207 @@
+commands:
+  - command: terminal length 0
+  - command: show version brief
+  - command: show platform
+  - command: admin show platform
+  - command: admin show install active summary
+  - command: admin show hw-module fpd
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+  - command: admin show diag
+  - command: admin show environment all
+  - command: admin show diagnostic result
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+  - command: admin show context
+  - command: admin show redundancy
+  - command: show interface summary
+  - command: show im status  brie
+  - command: show proc cpu
+  - command: show memory summary
+  - command: show watchdog
+  - command: show controllers fabric fia errors ingress
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+  - command: show controllers fabric fia errors egress
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+  - command: show pfm location all
+  - command: show asic-errors all detail
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"    
+  - command: show asic-errors all summary
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+  - command: show bun brief 
+  - command: show ospf interface brief 
+  - command: show int brief 
+  - command: show mpls ldp interface brief 
+  - command: show mpls ldp neighbor brief 
+  - command: show mpls traffic-eng tunnels summary 
+  - command: show mpls traffic-eng tunnels detail 
+  - command: show rsvp interface 
+  - command: show bfd summary 
+  - command: show bfd session
+  - command: show bfd session detail 
+  - command: show install active
+  - command: show lpts pifib hardware entry brief location all
+  - command: show process cpu | ex 0%      0%       0%
+  - command: show process memory 
+  - command: show watchdog memory-state location all
+  - command: show int summary
+  - command: show int br
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"   
+  - command: show install active | i Pack
+  - command: show install commit | i Pack
+  - command: show install active
+  - command: show install commit
+  - command: show redundancy
+  - command: show health gsp
+  - command: show health sysdb
+  - command: show health cfgmgr
+  - command: show process blocked location all
+  - command: show running-config
+  - command: show interface detail
+  - command: show interface accounting
+  - command: show route summary
+  - command: show context
+  - command: show watchdog memory-state location all 
+  - command: show media
+  - command: show lpts ifib statistics
+  - command: show lpts ifib entry brief statistics
+  - command: show lpts ifib slices statistics
+  - command: show mpls ldp forwarding detail | include N/A
+  - command: show watchdog memory-state | include Free
+  - command: Show cef unresolved
+  - command: show prm server tcam summary all all all
+  - command: sh pfm location all | ex "node:|-|CURRENT|PFM|Raise|NONE|POWER_ALAR|POWER_WAR|POW"
+  - command: show controllers fabric fia bridge stats
+  - command: show controllers fabric fia stats
+  - command: show drops all ongoing location all
+  - command: show controllers fabric fia link-status
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"
+      - "0/RP0/CPU0"
+      - "o/RP1/CPU0"   
+  - command: show controllers np ports all
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"    
+  - command: show controllers fabric crossbar link-status instance 0
+    location:
+      - "0/0/CPU0"
+      - "0/1/CPU0"
+      - "0/2/CPU0"
+      - "0/3/CPU0"
+      - "0/4/CPU0"
+      - "0/5/CPU0"
+      - "0/6/CPU0"
+      - "0/7/CPU0"
+      - "0/8/CPU0"
+      - "0/9/CPU0"
+      - "0/10/CPU0"
+      - "0/11/CPU0"    
+  - command: show controllers fabric crossbar link-status instance 0 location 0/RP0/CPU0
+  - command: show controllers fabric crossbar link-status instance 1 location 0/RP0/CPU0
+  - command: show controllers fabric crossbar link-status instance 0 location 0/RP1/CPU0
+  - command: show controllers fabric crossbar link-status instance 1 location 0/RP1/CPU0
+  - command: show logg

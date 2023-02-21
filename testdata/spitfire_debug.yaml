@@ -1,0 +1,131 @@
+commands:
+  - command: show interface all accounting rates
+  - command: show controllers npu stats traps-all instance 0
+    location:
+      - "0/RP0/CPU0"
+  - command: show drops all
+    location:
+      - "0/RP0/CPU0"
+  - command: show controller npu trace interrupt-error
+    location:
+      - "0/RP0/CPU0"
+  - command: show controller npu driver
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers switch statistics
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script npu_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script npe_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script asic_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script print_get_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script dram_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script hbm_error_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script ifgb_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script ifgb_port_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script sf_oq_debug"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script sf_rate_checker"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script detailed_rate_checker"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script hbm_error_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu debugshell 0  "script resource_usage 0"
+    location:
+      - "0/RP0/CPU0"
+  - command: show captured packets traps all
+    location:
+      - "0/RP0/CPU0"
+  - command: show spp node-counters
+    location:
+      - "0/RP0/CPU0"
+  - command: show arp traffic
+    location:
+      - "0/RP0/CPU0"
+  - command: show fwd statistics all
+  - command: show netio idb all brief
+  - command: show netio idb Bundle-Ether260
+  - command: show netio idb Bundle-Ether341
+  - command: show netio idb Bundle-Ether342
+  - command: show netio idb Bundle-Ether260.10
+  - command: show netio rates
+  - command: show netio drops
+  - command: show netio trace all
+  - command: show controllers npu stats traps-all instance all
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu stats voq ingress interface all instance all
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers npu voq-usage interface all instance all
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/30/0 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/30/1 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/30/2 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/30/3 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/31/0 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/31/1 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/31/2 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show controllers HundredGigE0/0/0/31/3 stats
+    location:
+      - "0/RP0/CPU0"
+  - command: show drops all ongoing
+    location:
+      - "0/RP0/CPU0"
+    times: 3
+    interval: 10
+  - command: show controller npu debugshell 0 "script print_get_counters"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controller npu debugshell 0 "script print_get_counters TRUE"
+    location:
+      - "0/RP0/CPU0"
+    times: 2
+    interval: 10
+  - command: show controller npu debugshell 0 "script print_get_counters TRUE"
+    location:
+      - "0/RP0/CPU0"
+    times: 2
+    interval: 60
+  - command: show controller npu debugshell 0 "script sf_oq_debug"
+    location:
+      - "0/RP0/CPU0"
+  - command: show controller npu debugshell 0 "script npe_counters_table"
+    location:
+      - "0/RP0/CPU0"
