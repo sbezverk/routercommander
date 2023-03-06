@@ -61,3 +61,4 @@ First volume we mount or map into the container is for the resulting log file, *
 second volume we map **-v /home/some-user/testdata:/testdata** to give the container access to the commands yaml file.
 
 The resulting log file will be stored in **/home/some-user/logs** folder.
+
