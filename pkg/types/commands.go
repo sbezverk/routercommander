@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func GetCommands(fn string, hc bool) (*Commands, error) {
+func GetCommands(fn string, hc bool) (*Commander, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
@@ -22,8 +22,8 @@ func GetCommands(fn string, hc bool) (*Commands, error) {
 	if _, err := f.Read(b); err != nil {
 		return nil, fmt.Errorf("fail to read file %s with error: %+v", fn, err)
 	}
-	c := &Commands{
-		List: make([]*ShowCommand, 0),
+	c := &Commander{
+		//		List: make([]*Command, 0),
 	}
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("fail tp unmarshal commands yaml file %s with error: %+v", fn, err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"regexp"
 	"strings"
@@ -20,7 +21,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
-	ProcessCommand(cmd *ShowCommand, hc bool) []error
+	ProcessCommand(cmd *Command, hc bool) []error
 	Close()
 }
 
@@ -33,13 +34,13 @@ type cmdResult struct {
 	result []byte
 }
 
-func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
+func (r *router) ProcessCommand(cmd *Command, hc bool) []error {
 	c := cmd.Cmd
 	var errs []error
 	results := make([]*cmdResult, 0)
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
 		if err != nil {
 			return []error{err}
 		}
@@ -47,7 +48,7 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
-			rs, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
 			if err != nil {
 				return []error{err}
 			}
@@ -67,13 +68,12 @@ func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
 	return errs
 }
 
-func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
+func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
 	if glog.V(5) {
-		rn := strings.TrimSuffix(r.GetName(), ":22")
 		if interval == 0 || times == 0 {
-			glog.Infof("Sending command: %q to router: %q", cmd, rn)
+			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, rn)
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, r.GetName())
 		}
 	}
 	if interval == 0 || times == 0 {
@@ -110,6 +110,7 @@ var _ Router = &router{}
 
 type router struct {
 	name      string
+	port      int
 	sshConfig *ssh.ClientConfig
 	stdin     io.WriteCloser
 	stdout    io.Reader
@@ -132,17 +133,16 @@ func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
 	return buffer, nil
 }
 
-func NewRouter(rn string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
-	routerName := string(rn) + ":22"
-	glog.Infof("Successfully dialed router: %s", rn)
+func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
 	r := &router{
-		name:      routerName,
+		name:      rn,
+		port:      port,
 		sshConfig: sshConfig,
 		logger:    l,
 	}
-	// Create sesssion
+	// Dial and if successful, create ssh session
 	var err error
-	r.sshClient, err = ssh.Dial("tcp", r.name, r.sshConfig)
+	r.sshClient, err = ssh.Dial("tcp", r.name+":"+strconv.Itoa(r.port), r.sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial router: %s with error: %+v", r.name, err)
 	}
@@ -150,7 +150,7 @@ func NewRouter(rn string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
-
+	glog.Infof("Successfully dialed router: %s", rn)
 	if err := r.session.RequestPty("vt100", 256, 40, ssh.TerminalModes{
 		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,

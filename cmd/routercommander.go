@@ -24,6 +24,7 @@ var (
 	login   string
 	pass    string
 	hc      bool
+	port    int
 )
 
 var wg sync.WaitGroup
@@ -36,10 +37,11 @@ func init() {
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
 	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
+	flag.IntVar(&port, "port", 22, "Port to use for SSH sessions, default 22")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	glog.Infof("Callback is called with hostname: %s remote address: %s", strings.TrimSuffix(hostname, ":22"), remote.String())
+	glog.Infof("Callback is called with hostname: %s remote address: %s", strings.Split(hostname, ":")[0], remote.String())
 	return nil
 }
 
@@ -114,13 +116,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	glog.Infof("Commands: %+v", *commands)
 	for _, router := range routers {
 		li, err := log.NewLogger(router)
 		if err != nil {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
 			os.Exit(1)
 		}
-		r, err := types.NewRouter(router, sshConfig(), li)
+		r, err := types.NewRouter(router, port, sshConfig(), li)
 		if err != nil {
 			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
 			os.Exit(1)
@@ -131,13 +134,12 @@ func main() {
 	wg.Wait()
 }
 
-func collect(r types.Router, commands *types.Commands, hc bool) {
+func collect(r types.Router, commands *types.Commander, hc bool) {
 	defer wg.Done()
-	rn := strings.TrimSuffix(r.GetName(), ":22")
-	glog.Infof("router: %s", rn)
+	glog.Infof("router: %s", r.GetName())
 	for _, c := range commands.List {
 		if errs := r.ProcessCommand(c, hc); errs != nil {
-			glog.Errorf("router: %s encountered the following errors:", rn)
+			glog.Errorf("router: %s encountered the following errors:", r.GetName())
 			for _, err := range errs {
 				glog.Errorf("\t - %+v", err)
 			}

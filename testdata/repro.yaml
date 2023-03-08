@@ -1,0 +1,15 @@
+# Supported options for mode are: repro and collect
+mode: "repro"
+commands:
+  - command: ping 10.177.15.10
+    wait_before: 10
+    wait_after: 10
+    #    times: 2
+    #    interval: 10
+    #    pattern:
+    #      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    debug: true
+# repro section defines parameters of execution of a group of commands defined by commands
+repro:
+  times: 2
+  interval: 10
