@@ -74,7 +74,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.0.1           |
+    | routercommander                  v0.0.2           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -144,21 +144,67 @@ func collect(r types.Router, commands *types.Commander) {
 	if commands.Collect != nil {
 		hc = commands.Collect.HealthCheck
 	}
-	for _, c := range commands.List {
-		results, err := r.ProcessCommand(c)
-		if err != nil {
-			glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
-			return
+	iterations := 1
+	interval := 0
+	if commands.Repro != nil {
+		// In order to detect error condition, health check must be enabled in repro mode
+		hc = true
+		if commands.Repro.Times > 0 {
+			iterations = commands.Repro.Times
 		}
-		if hc {
-			for _, re := range results {
-				for _, p := range c.RegExp {
-					if i := p.FindIndex(re.Result); i != nil {
-						glog.Errorf("router %s found matching line: %q, command: %q", strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+		if commands.Repro.Interval > 0 {
+			interval = commands.Repro.Interval
+		}
+		glog.Infof("router %s in repro mode, the command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
+	}
+	triggered := false
+out:
+	for i := 0; i < iterations; i++ {
+		glog.Infof("router %s, executing iteration number %d out of total %d...", r.GetName(), i+1, iterations)
+		for _, c := range commands.List {
+			collectResult := true
+			if mode == "repro" {
+				collectResult = c.CollectResult
+			}
+			results, err := r.ProcessCommand(c, collectResult)
+			if err != nil {
+				glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+				return
+			}
+			if hc {
+				for _, re := range results {
+					for _, p := range c.RegExp {
+						if i := p.FindIndex(re.Result); i != nil {
+							triggered = true
+							glog.Errorf("router %s found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+							break out
+						}
 					}
 				}
 			}
 		}
+		types.Delay(interval)
+	}
+	// If the issue was triggered, collecting commands needed to troubleshooting
+	if triggered && mode == "repro" {
+		glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
+		for _, c := range commands.Repro.PostMortemList {
+			_, err := r.ProcessCommand(c, true)
+			if err != nil {
+				glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+				return
+			}
+		}
+		return
+	}
+	if !triggered && mode == "repro" {
+		glog.Infof("repro process on router %s did not succeed triggering the failure condition", r.GetName())
+		return
+	}
+	if triggered {
+		glog.Errorf("health check validation failed on router %s, check collected log", r.GetName())
+	} else {
+		glog.Errorf("collection completed successfully on router %s", r.GetName())
 	}
 }
 
