@@ -21,7 +21,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
-	ProcessCommand(cmd *Command) ([]*CmdResult, error)
+	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
 }
 
@@ -34,20 +34,20 @@ type CmdResult struct {
 	Result []byte
 }
 
-func delay(d int) {
+func Delay(d int) {
 	t := time.NewTimer(time.Duration(d) * time.Second)
 	defer t.Stop()
 	<-t.C
 }
 
-func (r *router) ProcessCommand(cmd *Command) ([]*CmdResult, error) {
+func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult, error) {
 	c := cmd.Cmd
 	results := make([]*CmdResult, 0)
 
 	// TODO (sbezverk) Add some sanity check for this timer
 
 	if cmd.WaitBefore != 0 {
-		delay(cmd.WaitBefore)
+		Delay(cmd.WaitBefore)
 	}
 	if len(cmd.Location) == 0 {
 		var err error
@@ -55,7 +55,9 @@ func (r *router) ProcessCommand(cmd *Command) ([]*CmdResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, rs...)
+		if collectResult {
+			results = append(results, rs...)
+		}
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
@@ -63,11 +65,13 @@ func (r *router) ProcessCommand(cmd *Command) ([]*CmdResult, error) {
 			if err != nil {
 				return nil, err
 			}
-			results = append(results, rs...)
+			if collectResult {
+				results = append(results, rs...)
+			}
 		}
 	}
 	if cmd.WaitAfter != 0 {
-		delay(cmd.WaitAfter)
+		Delay(cmd.WaitAfter)
 	}
 
 	return results, nil

@@ -33,6 +33,9 @@ func GetCommands(fn string) (*Commander, error) {
 	if c.Collect != nil {
 		hc = c.Collect.HealthCheck
 	}
+	if c.Repro != nil {
+		hc = true
+	}
 	// Compile Regular Expressions only if Health Check is requested
 	if hc {
 		for _, cmd := range c.List {

@@ -3,23 +3,22 @@ package types
 import "regexp"
 
 type Command struct {
-	Cmd        string   `yaml:"command"`
-	Times      int      `yaml:"times"`
-	Interval   int      `yaml:"interval"`
-	WaitBefore int      `yaml:"wait_before"`
-	WaitAfter  int      `yaml:"wait_after"`
-	Location   []string `yaml:"location"`
-	Pattern    []string `yaml:"pattern"`
-	Debug      bool     `yaml:"debug"`
-	RegExp     []*regexp.Regexp
+	Cmd           string   `yaml:"command"`
+	Times         int      `yaml:"times"`
+	Interval      int      `yaml:"interval"`
+	WaitBefore    int      `yaml:"wait_before"`
+	WaitAfter     int      `yaml:"wait_after"`
+	Location      []string `yaml:"location"`
+	Pattern       []string `yaml:"pattern"`
+	Debug         bool     `yaml:"debug"`
+	CollectResult bool     `yaml:"collect_result"`
+	RegExp        []*regexp.Regexp
 }
 
 type Repro struct {
-	Times    int      `yaml:"times"`
-	Interval int      `yaml:"interval"`
-	Pattern  []string `yaml:"pattern"`
-	Debug    bool     `yaml:"debug"`
-	RegExp   []*regexp.Regexp
+	Times          int        `yaml:"times"`
+	Interval       int        `yaml:"interval"`
+	PostMortemList []*Command `yaml:"commands"`
 }
 type Collect struct {
 	HealthCheck bool `yaml:"health_check"`
