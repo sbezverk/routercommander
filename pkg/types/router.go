@@ -21,7 +21,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
-	ProcessCommand(cmd *Command, hc bool) []error
+	ProcessCommand(cmd *Command) ([]*CmdResult, error)
 	Close()
 }
 
@@ -29,20 +29,31 @@ func (r *router) GetName() string {
 	return r.name
 }
 
-type cmdResult struct {
-	cmd    string
-	result []byte
+type CmdResult struct {
+	Cmd    string
+	Result []byte
 }
 
-func (r *router) ProcessCommand(cmd *Command, hc bool) []error {
+func delay(d int) {
+	t := time.NewTimer(time.Duration(d) * time.Second)
+	defer t.Stop()
+	<-t.C
+}
+
+func (r *router) ProcessCommand(cmd *Command) ([]*CmdResult, error) {
 	c := cmd.Cmd
-	var errs []error
-	results := make([]*cmdResult, 0)
+	results := make([]*CmdResult, 0)
+
+	// TODO (sbezverk) Add some sanity check for this timer
+
+	if cmd.WaitBefore != 0 {
+		delay(cmd.WaitBefore)
+	}
 	if len(cmd.Location) == 0 {
 		var err error
 		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
 		if err != nil {
-			return []error{err}
+			return nil, err
 		}
 		results = append(results, rs...)
 	} else {
@@ -50,25 +61,19 @@ func (r *router) ProcessCommand(cmd *Command, hc bool) []error {
 			fc := c + " " + "location " + l
 			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
 			if err != nil {
-				return []error{err}
+				return nil, err
 			}
 			results = append(results, rs...)
 		}
 	}
-	if hc {
-		for _, r := range results {
-			for _, p := range cmd.RegExp {
-				if i := p.FindIndex(r.result); i != nil {
-					errs = append(errs, fmt.Errorf("found matching line: %q, command: %q", strings.Trim(string(r.result[i[0]:i[1]]), "\n\r\t"), r.cmd))
-				}
-			}
-		}
+	if cmd.WaitAfter != 0 {
+		delay(cmd.WaitAfter)
 	}
 
-	return errs
+	return results, nil
 }
 
-func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
+func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*CmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
 			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
@@ -81,14 +86,14 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*cm
 		if err != nil {
 			return nil, err
 		}
-		return []*cmdResult{
+		return []*CmdResult{
 			{
-				cmd:    cmd,
-				result: b,
+				Cmd:    cmd,
+				Result: b,
 			},
 		}, err
 	}
-	results := make([]*cmdResult, 0)
+	results := make([]*CmdResult, 0)
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
@@ -96,9 +101,9 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*cm
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, &cmdResult{
-			cmd:    cmd,
-			result: b,
+		results = append(results, &CmdResult{
+			Cmd:    cmd,
+			Result: b,
 		})
 		<-ticker.C
 	}

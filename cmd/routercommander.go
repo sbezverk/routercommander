@@ -23,8 +23,8 @@ var (
 	cmdFile string
 	login   string
 	pass    string
-	hc      bool
-	port    int
+	//	hc      bool
+	port int
 )
 
 var wg sync.WaitGroup
@@ -36,7 +36,7 @@ func init() {
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
-	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
+	//	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
 	flag.IntVar(&port, "port", 22, "Port to use for SSH sessions, default 22")
 }
 
@@ -110,13 +110,12 @@ func main() {
 		routers = append(routers, rtrName)
 	}
 
-	commands, err := types.GetCommands(cmdFile, hc)
+	commands, err := types.GetCommands(cmdFile)
 	if err != nil {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
 
-	glog.Infof("Commands: %+v", *commands)
 	for _, router := range routers {
 		li, err := log.NewLogger(router)
 		if err != nil {
@@ -129,21 +128,36 @@ func main() {
 			os.Exit(1)
 		}
 		wg.Add(1)
-		go collect(r, commands, hc)
+		go collect(r, commands)
 	}
 	wg.Wait()
 }
 
-func collect(r types.Router, commands *types.Commander, hc bool) {
+func collect(r types.Router, commands *types.Commander) {
 	defer wg.Done()
-	glog.Infof("router: %s", r.GetName())
+	mode := "collect"
+	if commands.Repro != nil {
+		mode = "repro"
+	}
+	glog.Infof("router: %s mode: %s", r.GetName(), mode)
+	hc := false
+	if commands.Collect != nil {
+		hc = commands.Collect.HealthCheck
+	}
 	for _, c := range commands.List {
-		if errs := r.ProcessCommand(c, hc); errs != nil {
-			glog.Errorf("router: %s encountered the following errors:", r.GetName())
-			for _, err := range errs {
-				glog.Errorf("\t - %+v", err)
-			}
+		results, err := r.ProcessCommand(c)
+		if err != nil {
+			glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 			return
+		}
+		if hc {
+			for _, re := range results {
+				for _, p := range c.RegExp {
+					if i := p.FindIndex(re.Result); i != nil {
+						glog.Errorf("router %s found matching line: %q, command: %q", strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+					}
+				}
+			}
 		}
 	}
 }

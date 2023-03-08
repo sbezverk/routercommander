@@ -15,11 +15,17 @@ type Command struct {
 }
 
 type Repro struct {
-	Times    int `yaml:"times"`
-	Interval int `yaml:"interval"`
+	Times    int      `yaml:"times"`
+	Interval int      `yaml:"interval"`
+	Pattern  []string `yaml:"pattern"`
+	Debug    bool     `yaml:"debug"`
+	RegExp   []*regexp.Regexp
+}
+type Collect struct {
+	HealthCheck bool `yaml:"health_check"`
 }
 type Commander struct {
-	Mode  string     `yaml:"mode"`
-	List  []*Command `yaml:"commands"`
-	Repro *Repro     `yaml:"repro"`
+	List    []*Command `yaml:"commands"`
+	Repro   *Repro     `yaml:"repro"`
+	Collect *Collect   `yaml:"collect"`
 }
