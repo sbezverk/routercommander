@@ -195,7 +195,11 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	// Some h/w specific commands send `\` escape, adding another escape to escape the original
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
-	startPattern := regexp.MustCompile(commandParts[0] + `\s+` + commandParts[1] + `\s+`)
+	startPartial := commandParts[0]
+	if len(commandParts) > 1 {
+		startPartial += `\s+` + commandParts[1] + `\s*`
+	}
+	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
 	timeout := time.NewTimer(time.Second * 120)
