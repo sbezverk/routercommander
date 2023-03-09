@@ -37,4 +37,14 @@ commands:
   - command: root
   - command: commit
     wait_after: 5
+  - command: interface BVI60
+  - command: shut
+  - command: root
+  - command: commit
+    wait_after: 5
+  - command: interface BVI60
+  - command: no shut
+  - command: root
+  - command: commit
+    wait_after: 1
   - command: end

@@ -1,4 +1,6 @@
-FROM scratch
+FROM alpine:latest
 
+RUN mkdir /testdata
+COPY ./testdata /testdata
 COPY ./bin/routercommander /routercommander
 ENTRYPOINT ["/routercommander"]

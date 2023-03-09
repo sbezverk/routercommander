@@ -31,7 +31,7 @@ commands:
   - command: routed interface BVI60
   - command: no bridge group NCR-NAT-CLUSTER-348
   - command: root
-  - command: commit
+  - command: commit force
   - command: end
   - command: configure terminal
   - command: l2vpn
@@ -56,9 +56,9 @@ commands:
   - command: routed interface BVI60
   - command: no bridge group NCR-NAT-CLUSTER
   - command: root
-  - command: commit
+  - command: commit force
   - command: end
-  - command: ping 10.177.15.11
+  - command: ping 10.177.15.11 count 1000 timeout 1
     debug: false
     collect_result: true
     pattern:
