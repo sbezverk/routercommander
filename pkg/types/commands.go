@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func GetCommands(fn string) (*Commander, error) {
+func readCommandFile(fn string) ([]byte, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
@@ -22,9 +22,13 @@ func GetCommands(fn string) (*Commander, error) {
 	if _, err := f.Read(b); err != nil {
 		return nil, fmt.Errorf("fail to read file %s with error: %+v", fn, err)
 	}
+	return b, nil
+}
+
+func parseCommandFile(b []byte) (*Commander, error) {
 	c := &Commander{}
 	if err := yaml.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("fail tp unmarshal commands yaml file %s with error: %+v", fn, err)
+		return nil, fmt.Errorf("fail tp unmarshal commands yaml with error: %+v", err)
 	}
 
 	// TODO (sbezverk) Add logic validation of parameters
@@ -37,14 +41,14 @@ func GetCommands(fn string) (*Commander, error) {
 		hc = true
 	}
 	// Compile Regular Expressions only if Health Check is requested
-	if hc {
-		for _, cmd := range c.List {
-			cmd.RegExp = make([]*regexp.Regexp, len(cmd.Pattern))
-			for i, p := range cmd.Pattern {
-				cmd.RegExp[i], err = regexp.Compile(p)
+	for _, cmd := range c.List {
+		if hc || cmd.CollectResult {
+			for _, p := range cmd.Patterns {
+				re, err := regexp.Compile(p.PatternString)
 				if err != nil {
-					return nil, fmt.Errorf("fail to compile regular expression %q with error: %+v", p, err)
+					return nil, fmt.Errorf("fail to compile regular expression %q with error: %+v", p.PatternString, err)
 				}
+				p.RegExp = re
 			}
 		}
 	}
@@ -52,4 +56,14 @@ func GetCommands(fn string) (*Commander, error) {
 	// TODO (sbezverk) Add processing patterns for repro section
 
 	return c, nil
+
+}
+
+func GetCommands(fn string) (*Commander, error) {
+	b, err := readCommandFile(fn)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseCommandFile(b)
 }

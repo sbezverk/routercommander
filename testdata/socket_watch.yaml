@@ -1,5 +1,14 @@
+repro:
+  times: 120
+  interval: 2
+  commands:
+    - command: "show arp | inc 10.177.15.11"
 commands:
-  - command: "run netstat -aup | grep tcp"
-    times: 3600
-    interval: 1
+  - command: "run netstat -s -udp"
+    collect_result: true
+    patterns:
+      - pattern_string: 'InOctets:\s*[0-9+]'
+        capture:
+          field_number: 2
+          separator: ":"
     debug: false

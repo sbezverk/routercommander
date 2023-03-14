@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -159,8 +160,8 @@ func collect(r types.Router, commands *types.Commander) {
 	}
 	triggered := false
 out:
-	for i := 0; i < iterations; i++ {
-		glog.Infof("router %s, executing iteration number %d out of total %d...", r.GetName(), i+1, iterations)
+	for it := 0; it < iterations; it++ {
+		glog.Infof("router %s, executing iteration number %d out of total %d...", r.GetName(), it+1, iterations)
 		for _, c := range commands.List {
 			collectResult := true
 			if mode == "repro" {
@@ -171,13 +172,39 @@ out:
 				glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 				return
 			}
-			if hc {
+			if hc || c.CollectResult {
 				for _, re := range results {
-					for _, p := range c.RegExp {
-						if i := p.FindIndex(re.Result); i != nil {
-							triggered = true
-							glog.Errorf("router %s found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
-							break out
+					for _, p := range c.Patterns {
+						if i := p.RegExp.FindIndex(re.Result); i != nil {
+							// There are to possibilities to react, matching against a pattern and get out if the match is found,
+							// OR if capture struct exists, to capture requested field and compare with the previous value, if values are not equal, then get out
+							// otherwise continue
+							if p.Capture == nil {
+								// First case, when only matching is required
+								triggered = true
+								glog.Errorf("router %s found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+								break out
+							}
+							if it == 0 {
+								// If it is first iteration just storing  first captured value
+								v, err := getValue(re.Result, i, p.Capture)
+								if err != nil {
+									glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
+									break out
+								}
+								p.Capture.Value = v
+								continue
+							}
+							v, err := getValue(re.Result, i, p.Capture)
+							if err != nil {
+								glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
+								break out
+							}
+							if p.Capture.Value != v {
+								triggered = true
+								glog.Infof("router %s detected change of value, previous value %+v current value %+v", r.GetName(), p.Capture.Value, v)
+								break out
+							}
 						}
 					}
 				}
@@ -232,4 +259,29 @@ func sshConfig() *ssh.ClientConfig {
 		Config:          c,
 		HostKeyCallback: remoteHostKeyCallback,
 	}
+}
+
+func getValue(b []byte, index []int, capture *types.Capture) (interface{}, error) {
+	// First finding  the start of the line with matching pattern
+	previousEndLine, err := regexp.Compile(`(?m)$`)
+	if err != nil {
+		return nil, err
+	}
+	sIndex := previousEndLine.FindAllIndex(b[:index[0]], -1)
+	if sIndex == nil {
+		return nil, fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
+	}
+	eIndex := previousEndLine.FindIndex(b[sIndex[len(sIndex)-1][0]:])
+	if eIndex == nil {
+		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[sIndex[len(sIndex)-1][0]:]))
+	}
+	s := string(b[sIndex[len(sIndex)-1][0] : sIndex[len(sIndex)-1][0]+eIndex[0]])
+	parts := strings.Split(s, capture.Separator)
+	if len(parts) < capture.FieldNumber-1 {
+		return nil, fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, capture.Separator, capture.FieldNumber)
+	}
+
+	glog.Infof("Value: %+v", strings.Trim(parts[capture.FieldNumber-1], " \n\t,"))
+
+	return strings.Trim(parts[capture.FieldNumber-1], " \n\t,"), nil
 }
