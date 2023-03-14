@@ -1,0 +1,5 @@
+commands:
+  - command: "run netstat -aup | grep tcp"
+    times: 3600
+    interval: 1
+    debug: false
