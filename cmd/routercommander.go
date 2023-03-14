@@ -75,7 +75,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.0.2           |
+    | routercommander                  v0.0.3           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+

@@ -13,9 +13,9 @@ commands:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
-    pattern:
-      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
-    debug: false 
+    patterns:
+      - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    debug: false
 ```
 
 As it is clearly seen, this file defines **show cef drops** command.  It also defines a number of times  to execute it **2** as well as a time interval between in seconds **10**. It also instructs **routercommander** to run it only against locations 0/0/CPU0, 0/1/CPU0 and 0/2/CPU0.
@@ -61,4 +61,3 @@ First volume we mount or map into the container is for the resulting log file, *
 second volume we map **-v /home/some-user/testdata:/testdata** to give the container access to the commands yaml file.
 
 The resulting log file will be stored in **/home/some-user/logs** folder.
-
