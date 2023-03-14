@@ -9,11 +9,9 @@ type Command struct {
 	WaitBefore    int        `yaml:"wait_before"`
 	WaitAfter     int        `yaml:"wait_after"`
 	Location      []string   `yaml:"location"`
-	Pattern       []string   `yaml:"pattern"`
 	Debug         bool       `yaml:"debug"`
 	CollectResult bool       `yaml:"collect_result"`
 	Patterns      []*Pattern `yaml:"patterns"`
-	RegExp        []*regexp.Regexp
 }
 
 type Repro struct {

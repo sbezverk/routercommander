@@ -262,26 +262,26 @@ func sshConfig() *ssh.ClientConfig {
 }
 
 func getValue(b []byte, index []int, capture *types.Capture) (interface{}, error) {
-	// First finding  the start of the line with matching pattern
 	previousEndLine, err := regexp.Compile(`(?m)$`)
 	if err != nil {
 		return nil, err
 	}
+	// First, find the start of the line with matching pattern
 	sIndex := previousEndLine.FindAllIndex(b[:index[0]], -1)
 	if sIndex == nil {
 		return nil, fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
 	}
+	// Second, find  the end of the string with matching pattern
 	eIndex := previousEndLine.FindIndex(b[sIndex[len(sIndex)-1][0]:])
 	if eIndex == nil {
 		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[sIndex[len(sIndex)-1][0]:]))
 	}
 	s := string(b[sIndex[len(sIndex)-1][0] : sIndex[len(sIndex)-1][0]+eIndex[0]])
+	// Splitting the resulting string using provided separator
 	parts := strings.Split(s, capture.Separator)
 	if len(parts) < capture.FieldNumber-1 {
 		return nil, fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, capture.Separator, capture.FieldNumber)
 	}
-
-	glog.Infof("Value: %+v", strings.Trim(parts[capture.FieldNumber-1], " \n\t,"))
 
 	return strings.Trim(parts[capture.FieldNumber-1], " \n\t,"), nil
 }

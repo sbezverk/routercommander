@@ -1,8 +1,8 @@
 repro:
-  times: 120
-  interval: 2
+  times: 86400
+  interval: 1
   commands:
-    - command: "show arp | inc 10.177.15.11"
+    - command: "show version"
 commands:
   - command: "run netstat -s -udp"
     collect_result: true
