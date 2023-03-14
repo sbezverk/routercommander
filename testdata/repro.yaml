@@ -1,0 +1,21 @@
+# repro section defines parameters of execution of a group of commands defined by commands
+repro:
+  times: 2
+  interval: 10
+collect:
+  health_check: false
+commands:
+  - command: configure terminal
+    wait_after: 10
+    debug: true
+  - command: end
+    wait_after: 5
+    debug: true
+  - command: ping 10.177.15.10
+    wait_before: 5
+    wait_after: 10
+    #    times: 2
+    #    interval: 10
+    #    pattern:
+    #      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    debug: false

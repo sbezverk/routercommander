@@ -1,0 +1,66 @@
+# repro section defines parameters of execution of a group of commands defined by commands
+repro:
+  times: 10000
+  interval: 1
+  commands:
+    - command: "show arp | inc 10.177.15.11"
+# In collect mode, when repro section is absent, value of collect_result is forced true
+collect:
+  health_check: false
+commands:
+  - command: configure terminal
+  - command: l2vpn
+  - command: bridge group NCR-NAT-CLUSTER
+  - command: bridge-domain VLAN_40
+  - command: description IPv4 to NAT
+  - command: interface Bundle-Ether99.40
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: interface Bundle-Ether110.40
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: routed interface BVI40
+  - command: bridge-domain VLAN_60
+  - command: description IPv6 to NAT
+  - command: interface Bundle-Ether99.60
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: interface Bundle-Ether110.60
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: routed interface BVI60
+  - command: no bridge group NCR-NAT-CLUSTER-348
+  - command: root
+  - command: commit force
+  - command: end
+  - command: configure terminal
+  - command: l2vpn
+  - command: bridge group NCR-NAT-CLUSTER-348
+  - command: bridge-domain VLAN_40
+  - command: description IPv4 to NAT
+  - command: interface Bundle-Ether99.40
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: interface Bundle-Ether110.40
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: routed interface BVI40
+  - command: bridge-domain VLAN_60
+  - command: description IPv6 to NAT
+  - command: interface Bundle-Ether99.60
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: interface Bundle-Ether110.60
+  - command: storm-control multicast pps 1000
+  - command: storm-control broadcast pps 5000
+  - command: routed interface BVI60
+  - command: no bridge group NCR-NAT-CLUSTER
+  - command: root
+  - command: commit force
+  - command: end
+  - command: ping 10.177.15.11 count 1000 timeout 1
+    debug: false
+    collect_result: true
+    pattern:
+      - 'Success rate is\s+0\s+percent'
+#      - 'Success rate is\s+[0-9][0-9]?\s+percent'

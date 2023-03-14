@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"regexp"
 	"strings"
@@ -20,7 +21,7 @@ import (
 type Router interface {
 	GetName() string
 	GetData(string, bool) ([]byte, error)
-	ProcessCommand(cmd *ShowCommand, hc bool) []error
+	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
 }
 
@@ -28,52 +29,60 @@ func (r *router) GetName() string {
 	return r.name
 }
 
-type cmdResult struct {
-	cmd    string
-	result []byte
+type CmdResult struct {
+	Cmd    string
+	Result []byte
 }
 
-func (r *router) ProcessCommand(cmd *ShowCommand, hc bool) []error {
+func Delay(d int) {
+	t := time.NewTimer(time.Duration(d) * time.Second)
+	defer t.Stop()
+	<-t.C
+}
+
+func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult, error) {
 	c := cmd.Cmd
-	var errs []error
-	results := make([]*cmdResult, 0)
+	results := make([]*CmdResult, 0)
+
+	// TODO (sbezverk) Add some sanity check for this timer
+
+	if cmd.WaitBefore != 0 {
+		Delay(cmd.WaitBefore)
+	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendShowCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
 		if err != nil {
-			return []error{err}
+			return nil, err
 		}
-		results = append(results, rs...)
+		if collectResult {
+			results = append(results, rs...)
+		}
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
-			rs, err := r.sendShowCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
 			if err != nil {
-				return []error{err}
+				return nil, err
 			}
-			results = append(results, rs...)
+			if collectResult {
+				results = append(results, rs...)
+			}
 		}
 	}
-	if hc {
-		for _, r := range results {
-			for _, p := range cmd.RegExp {
-				if i := p.FindIndex(r.result); i != nil {
-					errs = append(errs, fmt.Errorf("found matching line: %q, command: %q", strings.Trim(string(r.result[i[0]:i[1]]), "\n\r\t"), r.cmd))
-				}
-			}
-		}
+	if cmd.WaitAfter != 0 {
+		Delay(cmd.WaitAfter)
 	}
 
-	return errs
+	return results, nil
 }
 
-func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([]*cmdResult, error) {
+func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*CmdResult, error) {
 	if glog.V(5) {
-		rn := strings.TrimSuffix(r.GetName(), ":22")
 		if interval == 0 || times == 0 {
-			glog.Infof("Sending command: %q to router: %q", cmd, rn)
+			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, rn)
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, r.GetName())
 		}
 	}
 	if interval == 0 || times == 0 {
@@ -81,14 +90,14 @@ func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([
 		if err != nil {
 			return nil, err
 		}
-		return []*cmdResult{
+		return []*CmdResult{
 			{
-				cmd:    cmd,
-				result: b,
+				Cmd:    cmd,
+				Result: b,
 			},
 		}, err
 	}
-	results := make([]*cmdResult, 0)
+	results := make([]*CmdResult, 0)
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
@@ -96,9 +105,9 @@ func (r *router) sendShowCommand(cmd string, times, interval int, debug bool) ([
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, &cmdResult{
-			cmd:    cmd,
-			result: b,
+		results = append(results, &CmdResult{
+			Cmd:    cmd,
+			Result: b,
 		})
 		<-ticker.C
 	}
@@ -110,6 +119,7 @@ var _ Router = &router{}
 
 type router struct {
 	name      string
+	port      int
 	sshConfig *ssh.ClientConfig
 	stdin     io.WriteCloser
 	stdout    io.Reader
@@ -132,17 +142,16 @@ func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
 	return buffer, nil
 }
 
-func NewRouter(rn string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
-	routerName := string(rn) + ":22"
-	glog.Infof("Successfully dialed router: %s", rn)
+func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
 	r := &router{
-		name:      routerName,
+		name:      rn,
+		port:      port,
 		sshConfig: sshConfig,
 		logger:    l,
 	}
-	// Create sesssion
+	// Dial and if successful, create ssh session
 	var err error
-	r.sshClient, err = ssh.Dial("tcp", r.name, r.sshConfig)
+	r.sshClient, err = ssh.Dial("tcp", r.name+":"+strconv.Itoa(r.port), r.sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial router: %s with error: %+v", r.name, err)
 	}
@@ -150,7 +159,7 @@ func NewRouter(rn string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
-
+	glog.Infof("Successfully dialed router: %s", rn)
 	if err := r.session.RequestPty("vt100", 256, 40, ssh.TerminalModes{
 		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,
@@ -190,7 +199,11 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	// Some h/w specific commands send `\` escape, adding another escape to escape the original
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
-	startPattern := regexp.MustCompile(commandParts[0] + `\s+` + commandParts[1] + `\s+`)
+	startPartial := commandParts[0]
+	if len(commandParts) > 1 {
+		startPartial += `\s+` + commandParts[1] + `\s*`
+	}
+	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
 	timeout := time.NewTimer(time.Second * 120)

@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func GetCommands(fn string, hc bool) (*Commands, error) {
+func GetCommands(fn string) (*Commander, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
@@ -22,11 +22,19 @@ func GetCommands(fn string, hc bool) (*Commands, error) {
 	if _, err := f.Read(b); err != nil {
 		return nil, fmt.Errorf("fail to read file %s with error: %+v", fn, err)
 	}
-	c := &Commands{
-		List: make([]*ShowCommand, 0),
-	}
+	c := &Commander{}
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("fail tp unmarshal commands yaml file %s with error: %+v", fn, err)
+	}
+
+	// TODO (sbezverk) Add logic validation of parameters
+
+	hc := false
+	if c.Collect != nil {
+		hc = c.Collect.HealthCheck
+	}
+	if c.Repro != nil {
+		hc = true
 	}
 	// Compile Regular Expressions only if Health Check is requested
 	if hc {
@@ -40,6 +48,8 @@ func GetCommands(fn string, hc bool) (*Commands, error) {
 			}
 		}
 	}
+
+	// TODO (sbezverk) Add processing patterns for repro section
 
 	return c, nil
 }
