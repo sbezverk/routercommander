@@ -2,7 +2,7 @@
 
 ## Overview
 
-**routercommander** is the tool developed to automate the collection a large number of commands from a router or a series of routers. As in example of a taking router's health check, the health check might require to run more than 50 commands, doing it one by one is pure insanity, as it will consume significant time; copy and pasting all commands and pray that there is no any syntax error or pasted commands will be correctly accepted by a router is no better option. **routercommander** will execute each command, collect the output and stored it in the file with a router name and the time stamp as a file name. In addition, **routercommander** allows to extend a bit the collection process by introducing several controlling parameters. For example some commands might need to be executed several time and with a specific time interval between them. Some commands might have a required *location* keyword some not. All these particularities can be controlled from the commands YAML file. Please see below a sample of such file for **show cef drop** command.
+**routercommander** is the tool developed to automate the process of reproducing issues and the collection a large number of commands from a router or a series of routers. As in example of a taking router's health check, the health check might require to run more than 50 commands, doing it one by one is pure insanity, as it will consume significant time; copy and pasting all commands and pray that there is no any syntax error or pasted commands will be correctly accepted by a router is no better option. **routercommander** will execute each command, collect the output and stored it in the file with a router name and the time stamp as a file name. In addition, **routercommander** allows to extend a bit the collection process by introducing several controlling parameters. For example some commands might need to be executed several time and with a specific time interval between them. Some commands might have a required *location* keyword some not. All these particularities can be controlled from the commands YAML file. Please see below a sample of such file for **show cef drop** command.
 
 ```yaml
 commands:
@@ -13,14 +13,83 @@ commands:
       - "0/0/CPU0"
       - "0/1/CPU0"
       - "0/2/CPU0"
-    pattern:
-      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
-    debug: false 
+    patterns:
+      - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    debug: false
 ```
 
 As it is clearly seen, this file defines **show cef drops** command.  It also defines a number of times  to execute it **2** as well as a time interval between in seconds **10**. It also instructs **routercommander** to run it only against locations 0/0/CPU0, 0/1/CPU0 and 0/2/CPU0.
 
 the **pattern** keyword defines a pattern to detect an *alarming condition*, it is a part of a health check automation functionality which is still under the development.
+
+## Command customization parameters
+
+```yaml
+commands:
+   - command:     < ----- defines a command to execute
+   times:          < ----- defines number of times to execute this command,
+                           make sense only in collect mode
+   interval:       < ----- defines the interval in seconds between execution
+                           of the command, make sense only in collect mode
+     wait_before:
+     wait_after":
+     location:       < ----- defines a list of locations to execute the command
+       - "0/0/CPU0"
+     debug:          < ----- boolean true/false, used for debugging of
+                             the execution of the command
+     process_result: < ----- boolean true/false, by default in "collect" mode
+                             results of commands are not processed, used to
+                             override global value
+     patterns:
+        - pattern_string: < ----- defines a string representation of
+                                  a regular expression to match
+          capture:          < ----- if defined, used to capture a specific value
+                                    and then compare between repro mode iterations
+            field_number: 2 < ----- in the string matched by pattern_string,
+                                    field 2 will be captured
+            separator: ":"  < ----- defines character ":" as a separator to use
+                                    with the matched string to get field number 2.
+```
+
+If only **pattern_string** tag present, without **capture**, then it will be treated just as a matching condition in the health check validation of **collect** mode, when both present, then they will be used to detect a value change between iterations of **repro** mode.
+
+## 2 modes of routercommander operations "collect" and "repro"
+
+**routercommander** can operate in two modes, ***collect*** and ***repro***. If **repro** section is present in the yaml file, **routercommander**  will switch to **repro** mode regardless if **collect** section also present.
+
+### collect
+
+In **collect** mode **routercommander** just collect the information based on the list of commands. All commands customization parameters listed above are available in **collect** mode. Some of them though, do not make sense as **Capture** section, which requires the presence of **repro** section. In **collect** section, health check (matching patterns of a command) can be globally enabled, by default it is disabled.
+
+```yaml
+collect:
+   health_check:  < ----- boolean true/false
+```
+
+### repro
+
+**repro** mode sets parameters of execution of a group of commands defined by **commands** section. It also defines a list of “post-mortem” commands to collect if the issue is triggered. Please see the example below:
+
+```yaml
+repro:
+  times: 8640
+  interval: 10
+  postmortem_commands:
+    - command: 'run netstat -aup | grep tcp | grep -v "*.*"'
+      times: 200
+      interval: 1
+commands:
+  - command: "run netstat -s -udp"
+    collect_result: true
+    patterns:
+      - pattern_string: 'SndbufErrors:\s*[0-9+]'
+        capture:
+          field_number: 2
+          separator: ":"
+    debug: false
+```
+
+In this example, commands defined by **commands:** tag, will be executed 8640 times with the interval of 10 seconds.  The repro is considered as triggered when the value of field 2 is changed between repro iterations. In this case commands defined by **postmortem_commands** tag will be executed.
 
 ## To run
 
@@ -61,4 +130,3 @@ First volume we mount or map into the container is for the resulting log file, *
 second volume we map **-v /home/some-user/testdata:/testdata** to give the container access to the commands yaml file.
 
 The resulting log file will be stored in **/home/some-user/logs** folder.
-

@@ -1,5 +1,16 @@
+repro:
+  times: 8640
+  interval: 10
+  postmortem_commands:
+    - command: 'run netstat -aup | grep tcp | grep -v "*.*"'
+      times: 200
+      interval: 1
 commands:
-  - command: "run netstat -aup | grep tcp"
-    times: 3600
-    interval: 1
+  - command: "run netstat -s -udp"
+    process_result: true
+    patterns:
+      - pattern_string: 'SndbufErrors:\s*[0-9+]'
+        capture:
+          field_number: 2
+          separator: ":"
     debug: false

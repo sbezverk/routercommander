@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -23,8 +24,7 @@ var (
 	cmdFile string
 	login   string
 	pass    string
-	//	hc      bool
-	port int
+	port    int
 )
 
 var wg sync.WaitGroup
@@ -36,12 +36,14 @@ func init() {
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
-	//	flag.BoolVar(&hc, "health-check", false, "when health-check is true, patterns specified for each command will be checked for matches")
 	flag.IntVar(&port, "port", 22, "Port to use for SSH sessions, default 22")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
-	glog.Infof("Callback is called with hostname: %s remote address: %s", strings.Split(hostname, ":")[0], remote.String())
+	if glog.V(5) {
+		glog.Infof("Callback is called with hostname: %s remote address: %s", strings.Split(hostname, ":")[0], remote.String())
+	}
+
 	return nil
 }
 
@@ -74,7 +76,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.0.2           |
+    | routercommander                  v0.0.3           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -139,7 +141,6 @@ func collect(r types.Router, commands *types.Commander) {
 	if commands.Repro != nil {
 		mode = "repro"
 	}
-	glog.Infof("router: %s mode: %s", r.GetName(), mode)
 	hc := false
 	if commands.Collect != nil {
 		hc = commands.Collect.HealthCheck
@@ -155,29 +156,60 @@ func collect(r types.Router, commands *types.Commander) {
 		if commands.Repro.Interval > 0 {
 			interval = commands.Repro.Interval
 		}
-		glog.Infof("router %s in repro mode, the command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
+	}
+	switch mode {
+	case "repro":
+		glog.Infof("router %s: mode \"repro\", the command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
+	case "collect":
+		glog.Infof("router %s: mode \"collect\"", r.GetName())
 	}
 	triggered := false
 out:
-	for i := 0; i < iterations; i++ {
-		glog.Infof("router %s, executing iteration number %d out of total %d...", r.GetName(), i+1, iterations)
+	for it := 0; it < iterations; it++ {
+		glog.Infof("router %s: executing iteration - %d/%d:", r.GetName(), it+1, iterations)
 		for _, c := range commands.List {
 			collectResult := true
 			if mode == "repro" {
-				collectResult = c.CollectResult
+				collectResult = c.ProcessResult
 			}
 			results, err := r.ProcessCommand(c, collectResult)
 			if err != nil {
-				glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+				glog.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 				return
 			}
-			if hc {
+			if hc || c.ProcessResult {
 				for _, re := range results {
-					for _, p := range c.RegExp {
-						if i := p.FindIndex(re.Result); i != nil {
-							triggered = true
-							glog.Errorf("router %s found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
-							break out
+					for _, p := range c.Patterns {
+						if i := p.RegExp.FindIndex(re.Result); i != nil {
+							// There are to possibilities to react, matching against a pattern and get out if the match is found,
+							// OR if capture struct exists, to capture requested field and compare with the previous value, if values are not equal, then get out
+							// otherwise continue
+							if p.Capture == nil {
+								// First case, when only matching is required
+								triggered = true
+								glog.Errorf("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+								break out
+							}
+							if it == 0 {
+								// If it is first iteration just storing  first captured value
+								v, err := getValue(re.Result, i, p.Capture)
+								if err != nil {
+									glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
+									break out
+								}
+								p.Capture.Value = v
+								continue
+							}
+							v, err := getValue(re.Result, i, p.Capture)
+							if err != nil {
+								glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
+								break out
+							}
+							if p.Capture.Value != v {
+								triggered = true
+								glog.Infof("router %s: detected change of value, previous value %+v current value %+v", r.GetName(), p.Capture.Value, v)
+								break out
+							}
 						}
 					}
 				}
@@ -191,20 +223,20 @@ out:
 		for _, c := range commands.Repro.PostMortemList {
 			_, err := r.ProcessCommand(c, true)
 			if err != nil {
-				glog.Errorf("router %s failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+				glog.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 				return
 			}
 		}
 		return
 	}
 	if !triggered && mode == "repro" {
-		glog.Infof("repro process on router %s did not succeed triggering the failure condition", r.GetName())
+		glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
 		return
 	}
 	if triggered {
-		glog.Errorf("health check validation failed on router %s, check collected log", r.GetName())
+		glog.Errorf("router %s: health check validation failed, check collected log", r.GetName())
 	} else {
-		glog.Errorf("collection completed successfully on router %s", r.GetName())
+		glog.Errorf("router %s: collection completed successfully.", r.GetName())
 	}
 }
 
@@ -232,4 +264,29 @@ func sshConfig() *ssh.ClientConfig {
 		Config:          c,
 		HostKeyCallback: remoteHostKeyCallback,
 	}
+}
+
+func getValue(b []byte, index []int, capture *types.Capture) (interface{}, error) {
+	previousEndLine, err := regexp.Compile(`(?m)$`)
+	if err != nil {
+		return nil, err
+	}
+	// First, find the start of the line with matching pattern
+	sIndex := previousEndLine.FindAllIndex(b[:index[0]], -1)
+	if sIndex == nil {
+		return nil, fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
+	}
+	// Second, find  the end of the string with matching pattern
+	eIndex := previousEndLine.FindIndex(b[sIndex[len(sIndex)-1][0]:])
+	if eIndex == nil {
+		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[sIndex[len(sIndex)-1][0]:]))
+	}
+	s := string(b[sIndex[len(sIndex)-1][0] : sIndex[len(sIndex)-1][0]+eIndex[0]])
+	// Splitting the resulting string using provided separator
+	parts := strings.Split(s, capture.Separator)
+	if len(parts) < capture.FieldNumber-1 {
+		return nil, fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, capture.Separator, capture.FieldNumber)
+	}
+
+	return strings.Trim(parts[capture.FieldNumber-1], " \n\t,"), nil
 }
