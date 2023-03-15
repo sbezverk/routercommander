@@ -1,13 +1,15 @@
 repro:
-  times: 86400
-  interval: 1
-  commands:
-    - command: "show version"
+  times: 8640
+  interval: 10
+  postmortem_commands:
+    - command: 'run netstat -aup | grep tcp | grep -v "*.*"'
+      times: 200
+      interval: 1
 commands:
   - command: "run netstat -s -udp"
     collect_result: true
     patterns:
-      - pattern_string: 'InOctets:\s*[0-9+]'
+      - pattern_string: 'SndbufErrors:\s*[0-9+]'
         capture:
           field_number: 2
           separator: ":"

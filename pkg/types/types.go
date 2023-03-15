@@ -17,7 +17,7 @@ type Command struct {
 type Repro struct {
 	Times          int        `yaml:"times"`
 	Interval       int        `yaml:"interval"`
-	PostMortemList []*Command `yaml:"commands"`
+	PostMortemList []*Command `yaml:"postmortem_commands"`
 }
 type Collect struct {
 	HealthCheck bool `yaml:"health_check"`
