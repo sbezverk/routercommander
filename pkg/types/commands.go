@@ -42,7 +42,7 @@ func parseCommandFile(b []byte) (*Commander, error) {
 	}
 	// Compile Regular Expressions only if Health Check is requested
 	for _, cmd := range c.List {
-		if hc || cmd.CollectResult {
+		if hc || cmd.ProcessResult {
 			for _, p := range cmd.Patterns {
 				re, err := regexp.Compile(p.PatternString)
 				if err != nil {

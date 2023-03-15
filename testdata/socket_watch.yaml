@@ -7,7 +7,7 @@ repro:
       interval: 1
 commands:
   - command: "run netstat -s -udp"
-    collect_result: true
+    process_result: true
     patterns:
       - pattern_string: 'SndbufErrors:\s*[0-9+]'
         capture:

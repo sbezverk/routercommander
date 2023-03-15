@@ -45,7 +45,7 @@ func TestParseCommandFile(t *testing.T) {
 						Cmd:           "run netstat -aup | grep tcp",
 						Times:         3600,
 						Interval:      1,
-						CollectResult: true,
+						ProcessResult: true,
 						Patterns: []*Pattern{
 							{
 								PatternString: `SndbufErrors:\s*[0-9+]`,

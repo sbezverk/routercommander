@@ -170,14 +170,14 @@ out:
 		for _, c := range commands.List {
 			collectResult := true
 			if mode == "repro" {
-				collectResult = c.CollectResult
+				collectResult = c.ProcessResult
 			}
 			results, err := r.ProcessCommand(c, collectResult)
 			if err != nil {
 				glog.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 				return
 			}
-			if hc || c.CollectResult {
+			if hc || c.ProcessResult {
 				for _, re := range results {
 					for _, p := range c.Patterns {
 						if i := p.RegExp.FindIndex(re.Result); i != nil {
