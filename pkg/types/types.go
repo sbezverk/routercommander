@@ -39,12 +39,12 @@ type Pattern struct {
 	Capture                  *Capture         `yaml:"capture"`
 	CapturedValuesProcessing []*CapturedValue `yaml:"captured_values"`
 	PatternCommands          []*Command       `yaml:"pattern_commands"`
-	CheckAllResults          bool             `yaml:"check_all_results`
+	CheckAllResults          bool             `yaml:"check_all_results"`
 	RegExp                   *regexp.Regexp
+	Values                   map[int]map[int]interface{}
 }
 
 type Capture struct {
 	FieldNumber []int  `yaml:"field_number"`
 	Separator   string `yaml:"separator"`
-	Value       map[int]interface{}
 }

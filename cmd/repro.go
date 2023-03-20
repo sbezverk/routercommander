@@ -49,10 +49,12 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 	for it := 0; it < iterations; it++ {
 		glog.Infof("router %s: executing iteration - %d/%d:", r.GetName(), it+1, iterations)
 
-		if triggered, err = processReproGroupOfCommands(r, commands.MainCommandGroup); err != nil {
+		if triggered, err = processReproGroupOfCommands(r, commands.MainCommandGroup, it); err != nil {
 			glog.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
 		}
-
+		if triggered {
+			break
+		}
 		types.Delay(interval)
 	}
 	// If the issue was triggered, collecting commands needed to troubleshooting
@@ -65,15 +67,12 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 				return
 			}
 		}
-		return
-	}
-	if !triggered {
+	} else {
 		glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
-		return
 	}
 }
 
-func processReproGroupOfCommands(r types.Router, commands []*types.Command) (bool, error) {
+func processReproGroupOfCommands(r types.Router, commands []*types.Command, iteration int) (bool, error) {
 	for _, c := range commands {
 		results, err := r.ProcessCommand(c, true)
 		if err != nil {
@@ -83,40 +82,48 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command) (boo
 		for _, re := range results {
 			for _, p := range c.Patterns {
 				if i := p.RegExp.FindIndex(re.Result); i != nil {
-					// There are to possibilities to react, matching against a pattern and get out if the match is found,
-					// OR if capture struct exists, to capture requested field and compare with the previous value, if values are not equal, then get out
-					// otherwise continue
+					// There are two possibilities to react, matching against a pattern and get out if the match is found,
+					// OR if capture struct exists, to capture requested fields and follow Captured Values processing logic.
 					if p.Capture == nil {
 						// First case, when only matching is required
 						glog.Errorf("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
 						return true, nil
 					}
-					// 			if it == 0 {
-					// 				// If it is first iteration just storing  first captured value
-					// 				v, err := getValue(re.Result, i, p.Capture)
-					// 				if err != nil {
-					// 					glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
-					// 					break out
-					// 				}
-					// 				p.Capture.Value = v
-					// 				continue
-					// 			}
-					// 			v, err := getValue(re.Result, i, p.Capture)
-					// 			if err != nil {
-					// 				glog.Errorf("failed to extract value of field %d, separator: %q from data: %q with error: %+v", p.Capture.FieldNumber, p.Capture.Separator, string(re.Result), err)
-					// 				break out
-					// 			}
-					// 			if p.Capture.Value != v {
-					// 				triggered = true
-					// 				glog.Infof("router %s: detected change of value, previous value %+v current value %+v", r.GetName(), p.Capture.Value, v)
-					// 				break out
-					// 			}
+					// Capture is mot nil
+					vm, err := getValue(re.Result, i, p.Capture)
+					if err != nil {
+						return false, fmt.Errorf("failed to extract values defined by Capture tag for pattern: %s with error: %+v", p.PatternString, err)
+					}
+					// Storing extracted fields in pattern's Values per iterations map.
+					p.Values[iteration] = vm
+					if p.CapturedValuesProcessing == nil {
+						continue
+					}
+					// There are per Captured Values processing instructions
+					for _, pr := range p.CapturedValuesProcessing {
+						// Check if there is a requested field in Values map
+						f, ok := p.Values[iteration][pr.FieldNumber]
+						if !ok {
+							return false, fmt.Errorf("field: %d in pattern: %s map is not found", pr.FieldNumber, p.PatternString)
+						}
+						switch pr.Operation {
+						case "compare_with_previous":
+							if iteration == 0 {
+								continue
+							}
+							if f != p.Values[iteration-1][pr.FieldNumber] {
+								return true, nil
+							}
+						default:
+							return false, fmt.Errorf("unknown operation: %s for field: %d for pattern: %s", pr.Operation, pr.FieldNumber, p.PatternString)
+						}
+					}
 				}
 
 				// TODO (sbezverk) Further action depends of the logic coded above
 
 				if p.PatternCommands != nil {
-					if _, err := processReproGroupOfCommands(r, p.PatternCommands); err != nil {
+					if _, err := processReproGroupOfCommands(r, p.PatternCommands, 0); err != nil {
 						return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", p.PatternString, err)
 					}
 				}
