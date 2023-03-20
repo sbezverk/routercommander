@@ -1,10 +1,8 @@
 repro:
-  times: 8640
-  interval: 10
+  times: 604800
+  interval: 1
   postmortem_commands:
-    - command: 'run netstat -aup | grep tcp | grep -v "*.*"'
-      times: 200
-      interval: 1
+    - command: 'run for i in {1..200}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
 commands:
   - command: "run netstat -s -udp"
     process_result: true

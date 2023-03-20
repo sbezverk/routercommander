@@ -1,7 +1,7 @@
 commands:
   - command: show cef drops
-    times: 2
-    interval: 10
+    times: 1
+    interval: 1
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"

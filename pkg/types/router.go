@@ -23,10 +23,15 @@ type Router interface {
 	GetData(string, bool) ([]byte, error)
 	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
+	GetLogger() log.Logger
 }
 
 func (r *router) GetName() string {
 	return r.name
+}
+
+func (r *router) GetLogger() log.Logger {
+	return r.logger
 }
 
 type CmdResult struct {
@@ -206,7 +211,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
-	timeout := time.NewTimer(time.Second * 120)
+	timeout := time.NewTimer(time.Second * 300)
 	defer func() {
 		close(errCh)
 		close(doneCh)

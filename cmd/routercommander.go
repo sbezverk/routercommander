@@ -14,17 +14,25 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/log"
+	"github.com/sbezverk/routercommander/pkg/messenger"
+	"github.com/sbezverk/routercommander/pkg/messenger/email"
 	"github.com/sbezverk/routercommander/pkg/types"
 	"golang.org/x/crypto/ssh"
 )
 
 var (
-	rtrFile string
-	rtrName string
-	cmdFile string
-	login   string
-	pass    string
-	port    int
+	rtrFile    string
+	rtrName    string
+	cmdFile    string
+	login      string
+	pass       string
+	port       int
+	notify     bool
+	smtpServer string
+	smtpUser   string
+	smtpPass   string
+	smtpFrom   string
+	smtpTo     string
 )
 
 var wg sync.WaitGroup
@@ -37,6 +45,12 @@ func init() {
 	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
 	flag.IntVar(&port, "port", 22, "Port to use for SSH sessions, default 22")
+	flag.BoolVar(&notify, "notify", false, "If set to true, email notification will be send.")
+	flag.StringVar(&smtpServer, "smtp-server", "", "ip address or dns name with tcp port of smtp server, example: smtp.gmain.com:587")
+	flag.StringVar(&smtpUser, "smtp-user", "", "a user name to use to authenticate to the smtp server")
+	flag.StringVar(&smtpPass, "smtp-pass", "", "a password to use to authenticate to the smtp server")
+	flag.StringVar(&smtpFrom, "smtp-from", "", "email address to use for sending the report from")
+	flag.StringVar(&smtpTo, "smtp-to", "", "comma separated list of emails for sending the report to")
 }
 
 func remoteHostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
@@ -76,7 +90,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.0.3           |
+    | routercommander                  v0.0.4           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -111,13 +125,41 @@ func main() {
 	case rtrName != "":
 		routers = append(routers, rtrName)
 	}
-
+	var n messenger.Notifier
+	if notify {
+		failCheck := false
+		switch {
+		case smtpServer == "":
+			glog.Errorf("\"--smtp-server\" parameter cannot be empty")
+			failCheck = true
+		case smtpUser == "":
+			glog.Errorf("\"--smtp-user\" parameter cannot be empty")
+			failCheck = true
+		case smtpPass == "":
+			glog.Errorf("\"--smtp-pass\" parameter cannot be empty")
+			failCheck = true
+		case smtpFrom == "":
+			glog.Errorf("\"--smtp-from\" parameter cannot be empty")
+			failCheck = true
+		case smtpTo == "":
+			glog.Errorf("\"--smtp-to\" parameter cannot be empty")
+			failCheck = true
+		}
+		if failCheck {
+			glog.Errorf("validation of notification parameters failed")
+			os.Exit(1)
+		}
+		n, err = email.NewEmailNotifier(smtpServer, smtpUser, smtpPass, smtpFrom, smtpTo)
+		if err != nil {
+			glog.Errorf("failed to initialize email notifier with error: %+v, exiting...", err)
+			os.Exit(1)
+		}
+	}
 	commands, err := types.GetCommands(cmdFile)
 	if err != nil {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
-
 	for _, router := range routers {
 		li, err := log.NewLogger(router)
 		if err != nil {
@@ -130,12 +172,12 @@ func main() {
 			os.Exit(1)
 		}
 		wg.Add(1)
-		go collect(r, commands)
+		go collect(r, commands, n)
 	}
 	wg.Wait()
 }
 
-func collect(r types.Router, commands *types.Commander) {
+func collect(r types.Router, commands *types.Commander, n messenger.Notifier) {
 	defer wg.Done()
 	mode := "collect"
 	if commands.Repro != nil {
@@ -164,6 +206,23 @@ func collect(r types.Router, commands *types.Commander) {
 		glog.Infof("router %s: mode \"collect\"", r.GetName())
 	}
 	triggered := false
+
+	defer func() {
+		if n != nil {
+			glog.Infof("notification requested, attempting to send out the log for router %s", r.GetName())
+			li := r.GetLogger()
+			if li == nil {
+				glog.Error("logger interface is nil")
+				return
+			}
+			if err := n.Notify(li.GetLogFileName(), li.GetLog()); err != nil {
+				glog.Errorf("failed to Notify with error: %+v", err)
+				return
+			}
+			glog.Infof("routercommander sent log for router: %s", r.GetName())
+		}
+	}()
+
 out:
 	for it := 0; it < iterations; it++ {
 		glog.Infof("router %s: executing iteration - %d/%d:", r.GetName(), it+1, iterations)
