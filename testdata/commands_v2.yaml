@@ -45,7 +45,7 @@ repro:
           pattern_commands:
             - command: "run netstat -aup | grep tcp"
           # Defines if all operations must return true or not to consider
-          all_operations_match: true
+          check_all_results: true
   #
   # Defines a list of global post mortem commands which will be executed
   # regardless which command and pattern triggered the match.
