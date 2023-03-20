@@ -160,7 +160,7 @@ func main() {
 			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
 			os.Exit(1)
 		}
-		var ci *types.Commander
+		ci := &types.Commander{}
 		*ci = *commands
 		wg.Add(1)
 		if ci.Repro != nil {

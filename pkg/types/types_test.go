@@ -28,15 +28,18 @@ func TestParseCommandFile(t *testing.T) {
 		},
 		{
 			name: "capture case 1",
-			input: []byte(`commands:
+			input: []byte(`main_command_group:
 - command: "run netstat -aup | grep tcp"
   times: 3600
   interval: 1
   process_result: true
   patterns:
   - pattern_string:  SndbufErrors:\s*[0-9+]
+    captured_values:
+    - field_number: 2
+      operation: "compare_with_previous"
     capture:
-      field_number: 2
+      field_number: [2]
       separator: ":"
   debug: false`),
 			expect: &Commander{
@@ -53,6 +56,7 @@ func TestParseCommandFile(t *testing.T) {
 
 									FieldNumber: []int{2},
 									Separator:   ":",
+									Values:      make(map[int]interface{}),
 								},
 								RegExp: getRegExp(`SndbufErrors:\s*[0-9+]`),
 							},

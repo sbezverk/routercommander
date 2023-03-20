@@ -15,10 +15,11 @@ type Command struct {
 }
 
 type Repro struct {
-	Times                  int        `yaml:"times"`
-	Interval               int        `yaml:"interval"`
-	CommandProcessingRules []*Command `yaml:"command_processing_rules"`
-	PostMortemCommandGroup []*Command `yaml:"postmortem_command_group"`
+	Times                    int        `yaml:"times"`
+	Interval                 int        `yaml:"interval"`
+	CommandProcessingRules   []*Command `yaml:"command_processing_rules"`
+	PostMortemCommandGroup   []*Command `yaml:"postmortem_command_group"`
+	CapturedValuesProcessing map[string]map[string]map[int]*CapturedValue
 }
 type Collect struct {
 	HealthCheck bool `yaml:"health_check"`
@@ -41,10 +42,11 @@ type Pattern struct {
 	PatternCommands          []*Command       `yaml:"pattern_commands"`
 	CheckAllResults          bool             `yaml:"check_all_results"`
 	RegExp                   *regexp.Regexp
-	Values                   map[int]map[int]interface{}
+	ValuesStore              map[int]map[int]interface{}
 }
 
 type Capture struct {
 	FieldNumber []int  `yaml:"field_number"`
 	Separator   string `yaml:"separator"`
+	Values      map[int]interface{}
 }

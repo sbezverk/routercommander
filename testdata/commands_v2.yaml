@@ -25,16 +25,14 @@ repro:
     #
     # command tag must match to one of the command tag from the main_command_group, under
     # this tag the special instructions for its processing are listed.
-    - command: '"run netstat -s -udp'
+    - command: "run netstat -s -udp"
       patterns:
         #
         # the value of the pattern_string must match to one of the patterns defined for the command in the main_command_group.
         # If the pattern_string below had the capture tag in the main_command_group, then the captured
         # values would be available for the command mutation.
-        - pattern_string: 'SndbufErrors:\s*[0-9+]'
+        - pattern_string: 'InMcastPkts:\s*[0-9+]'
           captured_values:
-            - field_number: 1
-              operation: "none"
             - field_number: 2
               #
               # Defines operations to undertake on the captured value of the specific field.
@@ -50,7 +48,7 @@ repro:
   # Defines a list of global post mortem commands which will be executed
   # regardless which command and pattern triggered the match.
   postmortem_command_group:
-    - command: 'run for i in {1..200}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
+    - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
 #
 # Defines a command group used  to either collect information as in case of collect mode,
 # or to reproduce an issue as in case of repro mode.
@@ -58,9 +56,9 @@ main_command_group:
   - command: "run netstat -s -udp"
     process_result: true
     patterns:
-      - pattern_string: 'SndbufErrors:\s*[0-9+]'
+      - pattern_string: 'InMcastPkts:\s*[0-9+]'
         capture:
           # Defines an array of fields to capture from a  string matched by the pattern
-          field_number: [1, 2]
+          field_number: [2]
           separator: ":"
     debug: false
