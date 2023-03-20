@@ -40,7 +40,7 @@ func TestParseCommandFile(t *testing.T) {
       separator: ":"
   debug: false`),
 			expect: &Commander{
-				List: []*Command{
+				MainCommandGroup: []*Command{
 					{
 						Cmd:           "run netstat -aup | grep tcp",
 						Times:         3600,
@@ -51,7 +51,7 @@ func TestParseCommandFile(t *testing.T) {
 								PatternString: `SndbufErrors:\s*[0-9+]`,
 								Capture: &Capture{
 
-									FieldNumber: 2,
+									FieldNumber: []int{2},
 									Separator:   ":",
 								},
 								RegExp: getRegExp(`SndbufErrors:\s*[0-9+]`),

@@ -35,8 +35,9 @@ func (r *router) GetLogger() log.Logger {
 }
 
 type CmdResult struct {
-	Cmd    string
-	Result []byte
+	Cmd            string
+	Result         []byte
+	CapturedValues map[int]interface{}
 }
 
 func Delay(d int) {
@@ -54,6 +55,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.WaitBefore != 0 {
 		Delay(cmd.WaitBefore)
 	}
+
 	if len(cmd.Location) == 0 {
 		var err error
 		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
