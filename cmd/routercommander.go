@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 )
 
 var (
+	local      bool
 	rtrFile    string
 	rtrName    string
 	cmdFile    string
@@ -36,6 +38,7 @@ var wg sync.WaitGroup
 
 func init() {
 	runtime.GOMAXPROCS(1)
+	flag.BoolVar(&local, "local", false, "when set to true, routercommander is running on the local router")
 	flag.StringVar(&rtrFile, "routers-file", "", "File with routers' names")
 	flag.StringVar(&cmdFile, "commands-file", "", "YAML formated file with commands to collect")
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
@@ -90,59 +93,71 @@ func main() {
 
 	glog.Infof("\n%s\n", logo)
 
-	if login == "" || pass == "" {
-		glog.Error("--username and --password are mandatory parameters, exiting...")
-		os.Exit(1)
-	}
-	if rtrFile != "" && rtrName != "" {
-		glog.Error("--file and --list are mutually exclusive, exiting...")
-		os.Exit(1)
-	}
+	var n messenger.Notifier
+	routers := make([]string, 0)
+
 	if cmdFile == "" {
 		glog.Infof("no commands file is specified, nothing to do, exiting...")
 		os.Exit(1)
 	}
-	routers := make([]string, 0)
-	var err error
-	switch {
-	case rtrFile != "":
-		routers, err = getInfoFromFile(rtrFile)
-		if err != nil {
-			glog.Errorf("failed to get routers list from file: %s with error: %+v, exiting...", rtrFile, err)
+
+	if !local {
+		if login == "" || pass == "" {
+			glog.Error("--username and --password are mandatory parameters, exiting...")
 			os.Exit(1)
 		}
-	case rtrName != "":
-		routers = append(routers, rtrName)
-	}
-	var n messenger.Notifier
-	if notify {
-		failCheck := false
+		if rtrFile != "" && rtrName != "" {
+			glog.Error("--file and --list are mutually exclusive, exiting...")
+			os.Exit(1)
+		}
+		var err error
 		switch {
-		case smtpServer == "":
-			glog.Errorf("\"--smtp-server\" parameter cannot be empty")
-			failCheck = true
-		case smtpUser == "":
-			glog.Errorf("\"--smtp-user\" parameter cannot be empty")
-			failCheck = true
-		case smtpPass == "":
-			glog.Errorf("\"--smtp-pass\" parameter cannot be empty")
-			failCheck = true
-		case smtpFrom == "":
-			glog.Errorf("\"--smtp-from\" parameter cannot be empty")
-			failCheck = true
-		case smtpTo == "":
-			glog.Errorf("\"--smtp-to\" parameter cannot be empty")
-			failCheck = true
+		case rtrFile != "":
+			routers, err = getInfoFromFile(rtrFile)
+			if err != nil {
+				glog.Errorf("failed to get routers list from file: %s with error: %+v, exiting...", rtrFile, err)
+				os.Exit(1)
+			}
+		case rtrName != "":
+			routers = append(routers, rtrName)
 		}
-		if failCheck {
-			glog.Errorf("validation of notification parameters failed")
-			os.Exit(1)
+		if notify {
+			failCheck := false
+			switch {
+			case smtpServer == "":
+				glog.Errorf("\"--smtp-server\" parameter cannot be empty")
+				failCheck = true
+			case smtpUser == "":
+				glog.Errorf("\"--smtp-user\" parameter cannot be empty")
+				failCheck = true
+			case smtpPass == "":
+				glog.Errorf("\"--smtp-pass\" parameter cannot be empty")
+				failCheck = true
+			case smtpFrom == "":
+				glog.Errorf("\"--smtp-from\" parameter cannot be empty")
+				failCheck = true
+			case smtpTo == "":
+				glog.Errorf("\"--smtp-to\" parameter cannot be empty")
+				failCheck = true
+			}
+			if failCheck {
+				glog.Errorf("validation of notification parameters failed")
+				os.Exit(1)
+			}
+			n, err = email.NewEmailNotifier(smtpServer, smtpUser, smtpPass, smtpFrom, smtpTo)
+			if err != nil {
+				glog.Errorf("failed to initialize email notifier with error: %+v, exiting...", err)
+				os.Exit(1)
+			}
 		}
-		n, err = email.NewEmailNotifier(smtpServer, smtpUser, smtpPass, smtpFrom, smtpTo)
+	}
+	if local {
+		b, err := exec.Command("hostname").Output()
 		if err != nil {
-			glog.Errorf("failed to initialize email notifier with error: %+v, exiting...", err)
+			glog.Errorf("failed to get hostname of a local router with error: %+v, exiting...", err)
 			os.Exit(1)
 		}
+		routers = append(routers, strings.Trim(string(b), " \n\t,"))
 	}
 	commands, err := types.GetCommands(cmdFile)
 	if err != nil {
@@ -155,10 +170,15 @@ func main() {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
 			os.Exit(1)
 		}
-		r, err := types.NewRouter(router, port, sshConfig(), li)
-		if err != nil {
-			glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
-			os.Exit(1)
+		var r types.Router
+		if local {
+			r = types.NewLocalRouter(router, li)
+		} else {
+			r, err = types.NewRouter(router, port, sshConfig(), li)
+			if err != nil {
+				glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
+				os.Exit(1)
+			}
 		}
 		ci := &types.Commander{}
 		*ci = *commands
