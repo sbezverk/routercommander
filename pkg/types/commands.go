@@ -59,10 +59,13 @@ func parseCommandFile(b []byte) (*Commander, error) {
 	if c.Repro != nil {
 		// First Key is command, second Key is pattern , third key is field number
 		c.Repro.CapturedValuesProcessing = map[string]map[string]map[int]*CapturedValue{}
+		c.Repro.PerCmdPerPatternCommands = make(map[string]map[string][]*Command)
 		for _, cpr := range c.Repro.CommandProcessingRules {
 			c.Repro.CapturedValuesProcessing[cpr.Cmd] = make(map[string]map[int]*CapturedValue)
+			c.Repro.PerCmdPerPatternCommands[cpr.Cmd] = make(map[string][]*Command)
 			for _, p := range cpr.Patterns {
 				c.Repro.CapturedValuesProcessing[cpr.Cmd][p.PatternString] = make(map[int]*CapturedValue)
+				c.Repro.PerCmdPerPatternCommands[cpr.Cmd][p.PatternString] = p.PatternCommands
 				for _, f := range p.CapturedValuesProcessing {
 					c.Repro.CapturedValuesProcessing[cpr.Cmd][p.PatternString][f.FieldNumber] = f
 				}

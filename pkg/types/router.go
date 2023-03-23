@@ -224,11 +224,11 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	startFound := false
 	endFound := false
 	go func(done chan []byte, eCh chan error) {
-		l := make([]byte, 1024)
+		lb := make([]byte, 1024)
 		cmdFound := false
 		for {
-			if n, err := stdout.Read(l); err == nil {
-				copy(fullInput[index:index+n], l)
+			if n, err := stdout.Read(lb); err == nil {
+				copy(fullInput[index:index+n], lb)
 				index += n
 				if !cmdFound {
 					ns := startPattern.FindIndex(fullInput[:index])
@@ -264,9 +264,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		l.Log([]byte("=========> " + cmd + "\n"))
 	}
 	if debug {
-		if !strings.HasPrefix(cmd, "term") {
-			glog.Infof("Sending \"%s\"", cmd)
-		}
+		glog.Infof("Sending \"%s\"", cmd)
 	}
 	if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)

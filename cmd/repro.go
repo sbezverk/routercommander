@@ -81,16 +81,21 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 		}
 		for _, re := range results {
 			for _, p := range c.Patterns {
-				if i := p.RegExp.FindIndex(re.Result); i != nil {
+				if i := p.RegExp.FindAllIndex(re.Result, -1); i != nil {
 					// There are two possibilities to react, matching against a pattern and get out if the match is found,
 					// OR if capture struct exists, to capture requested fields and follow Captured Values processing logic.
 					if p.Capture == nil {
 						// First case, when only matching is required
-						glog.Errorf("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0]:i[1]]), "\n\r\t"), re.Cmd)
+						glog.Errorf("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0][0]:i[0][1]]), "\n\r\t"), re.Cmd)
 						return true, nil
 					}
-					// Capture is mot nil
-					vm, err := getValue(re.Result, i, p.Capture)
+					// Capture is mot nil, continue processing
+					// In case there are multiple occurrences of the same string in the output and a specific occurrence is of interest
+					indx := i[0]
+					if p.Capture.Occurrence > 0 && p.Capture.Occurrence < len(i) {
+						indx = i[p.Capture.Occurrence-1]
+					}
+					vm, err := getValue(re.Result, indx, p.Capture)
 					if err != nil {
 						return false, fmt.Errorf("failed to extract values defined by Capture tag for pattern: %s with error: %+v", p.PatternString, err)
 					}
@@ -111,6 +116,7 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 						glog.Infof("pattern: %s for command: %s is not found in CapturedValuesProcessing", p.PatternString, c.Cmd)
 						continue
 					}
+				out:
 					for f, v := range p.ValuesStore[iteration] {
 						glog.Infof("Current iteration: %d value: %s", f, v)
 						fp, ok := pp[f]
@@ -126,15 +132,17 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 							}
 							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
 							if v != p.ValuesStore[iteration-1][f] {
-								return true, nil
+								break out
 							}
 						default:
 							return false, fmt.Errorf("unknown operation: %s for field: %d for pattern: %s", fp.Operation, fp.FieldNumber, p.PatternString)
 						}
 					}
 					// TODO (sbezverk) Further action depends of the logic coded above
-					if p.PatternCommands != nil {
-						if _, err := processReproGroupOfCommands(r, p.PatternCommands, 0, nil); err != nil {
+					glog.Infof("per pattern commands: %+v", repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString])
+					if cmds, ok := repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString]; ok {
+						glog.Infof("Executing pattern specific commands...")
+						if _, err := processReproGroupOfCommands(r, cmds, 0, nil); err != nil {
 							return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", p.PatternString, err)
 						}
 					}
