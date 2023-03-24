@@ -55,6 +55,7 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 		if triggered {
 			break
 		}
+		glog.Infof("router %s: iteration - %d/%d completed,", r.GetName(), it+1, iterations)
 		types.Delay(interval)
 	}
 	// If the issue was triggered, collecting commands needed to troubleshooting
@@ -116,55 +117,60 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 						glog.Infof("pattern: %s for command: %s is not found in CapturedValuesProcessing", p.PatternString, c.Cmd)
 						continue
 					}
+					triggered := false
 				out:
 					for f, v := range p.ValuesStore[iteration] {
-						glog.Infof("Current iteration: %d value: %s", f, v)
+						glog.Infof("Current iteration: %d value: %s for field: %d", iteration+1, v, f)
 						fp, ok := pp[f]
 						if !ok {
 							glog.Infof("field: %d pattern: %s for command: %s is not found in CapturedValuesProcessing", f, p.PatternString, c.Cmd)
 							continue
 						}
-						glog.Infof("><SB> Captured values %s operation: %s", v, fp.Operation)
+						//						glog.Infof("><SB> Captured values %s operation: %s", v, fp.Operation)
 						switch fp.Operation {
 						case "compare_with_previous_neq":
 							if iteration == 0 {
 								continue
 							}
-							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
+							//							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
 							if v != p.ValuesStore[iteration-1][f] {
+								triggered = true
 								break out
 							}
 						case "compare_with_previous_eq":
 							if iteration == 0 {
 								continue
 							}
-							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
+							//							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
 							if v == p.ValuesStore[iteration-1][f] {
+								triggered = true
 								break out
 							}
 						case "compare_with_value_neq":
-							glog.Infof("><SB> value: %s current value: %s", p.Capture.Values[f], v)
+							//							glog.Infof("><SB> value: %s current value: %s", p.Capture.Values[f], v)
 							if v != p.Capture.Values[f] {
+								triggered = true
 								break out
 							}
 						case "compare_with_value_eq":
-							glog.Infof("><SB> value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
+							//							glog.Infof("><SB> value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
 							if v == p.Capture.Values[f] {
+								triggered = true
 								break out
 							}
 						default:
 							return false, fmt.Errorf("unknown operation: %s for field: %d for pattern: %s", fp.Operation, fp.FieldNumber, p.PatternString)
 						}
 					}
-					// TODO (sbezverk) Further action depends of the logic coded above
-					glog.Infof("per pattern commands: %+v", repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString])
-					if cmds, ok := repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString]; ok {
-						glog.Infof("Executing pattern specific commands...")
-						if _, err := processReproGroupOfCommands(r, cmds, 0, nil); err != nil {
-							return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", p.PatternString, err)
+					if triggered {
+						if cmds, ok := repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString]; ok {
+							glog.Infof("Executing pattern specific commands...")
+							if _, err := processReproGroupOfCommands(r, cmds, 0, nil); err != nil {
+								return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", p.PatternString, err)
+							}
 						}
+						return true, nil
 					}
-					return true, nil
 				}
 			}
 		}
