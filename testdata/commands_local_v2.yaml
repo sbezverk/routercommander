@@ -36,9 +36,11 @@ repro:
             - field_number: 2
               #
               # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous
-              # compare_with_value
-              operation: "compare_with_previous"
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_previous_neq"
               # value:
           pattern_commands:
             - command: "netstat -aup | grep tcp"

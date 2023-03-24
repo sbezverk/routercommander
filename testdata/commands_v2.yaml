@@ -60,7 +60,10 @@ main_command_group:
     patterns:
       - pattern_string: 'InMcastPkts:\s*[0-9+]'
         capture:
-          # Defines an array of fields to capture from a  string matched by the pattern
+          # Defines an array of fields to capture from a string matched by the pattern
           field_number: [2]
+          # Defines a separator character used on the matched line to separate fields
           separator: ":"
+          # In case there are multiple matches, occurrence allow to select which occurence to use to capture field(s)
+          occurrence: 1
     debug: false
