@@ -126,12 +126,30 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 						}
 						glog.Infof("><SB> Captured values %s operation: %s", v, fp.Operation)
 						switch fp.Operation {
-						case "compare_with_previous":
+						case "compare_with_previous_neq":
 							if iteration == 0 {
 								continue
 							}
 							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
 							if v != p.ValuesStore[iteration-1][f] {
+								break out
+							}
+						case "compare_with_previous_eq":
+							if iteration == 0 {
+								continue
+							}
+							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
+							if v == p.ValuesStore[iteration-1][f] {
+								break out
+							}
+						case "compare_with_value_neq":
+							glog.Infof("><SB> value: %s current value: %s", p.Capture.Values[f], v)
+							if v != p.Capture.Values[f] {
+								break out
+							}
+						case "compare_with_value_eq":
+							glog.Infof("><SB> value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
+							if v == p.Capture.Values[f] {
 								break out
 							}
 						default:
