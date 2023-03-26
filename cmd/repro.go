@@ -47,7 +47,7 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 	triggered := false
 	var err error
 	for it := 0; it < iterations; it++ {
-		glog.Infof("router %s: executing iteration - %d/%d:", r.GetName(), it+1, iterations)
+		glog.Infof("router %s: executing iteration - %d/%d", r.GetName(), it+1, iterations)
 
 		if triggered, err = processReproGroupOfCommands(r, commands.MainCommandGroup, it, commands.Repro); err != nil {
 			glog.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
