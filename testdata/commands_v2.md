@@ -1,0 +1,77 @@
+## Data model v2
+
+The following file describes the data model and available parameters for routercommanderv2.
+
+```yaml
+
+#
+# In collect mode, routercommander collects the output of commands defined under main_command_group tag
+# if commands do not have patterns to look for a specific text in the output or matching against patterns
+# is not required, health_check should be set to false.
+collect:
+  health_check: false
+#
+# In repro mode, the commands defined under the main_command_group tag are  used to trigger and detect
+# a specific issue. In most common case, after the issue is triggered, commands defined by
+# postmortem_command_group is collected.
+# command_processing_rules is optional and considered an advanced feature which allow further
+# customization of the commands to execute as a part of the postmortem.
+repro:
+  #
+  # times defines a number of iterations main_command_group is executed.
+  times: 2
+  #
+  # interval defines an interval between iterations.
+  interval: 10
+  #
+  # command_processing_rules optional and advanced feature,
+  # defines special processing rules for a command which triggered the match.
+  # Optional if no special processing is needed.
+  command_processing_rules:
+    #
+    # command tag must match to one of the command tag from the main_command_group, under
+    # this tag the special instructions for its processing are listed.
+    - command: "run netstat -s -udp"
+      patterns:
+        #
+        # the value of the pattern_string must match to one of the patterns defined for the command in the main_command_group.
+        # If the pattern_string below had the capture tag in the main_command_group, then the captured
+        # values would be available for the command mutation.
+        - pattern_string: 'InMcastPkts:\s*[0-9+]'
+          captured_values:
+            - field_number: 2
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_previous_neq"
+              # value:
+          pattern_commands:
+            - command: "run netstat -aup | grep tcp"
+          # Defines if all operations must return true or not to consider
+          check_all_results: true
+  #
+  # Defines a list of global post mortem commands which will be executed
+  # regardless which command and pattern triggered the match.
+  postmortem_command_group:
+    - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
+#
+# Defines a command group used  to either collect information as in case of collect mode,
+# or to reproduce an issue as in case of repro mode.
+main_command_group:
+  - command: "run netstat -s -udp"
+    process_result: true
+    patterns:
+      - pattern_string: 'InMcastPkts:\s*[0-9+]'
+        capture:
+          # Defines an array of fields to capture from a string matched by the pattern
+          field_number: [2]
+          # Defines a separator character used on the matched line to separate fields
+          separator: ":"
+          # In case there are multiple matches, occurrence allow to select which occurence to use to capture field(s)
+          occurrence: 1
+    debug: false
+
+```
