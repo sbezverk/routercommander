@@ -28,7 +28,7 @@ func readCommandFile(fn string) ([]byte, error) {
 func parseCommandFile(b []byte) (*Commander, error) {
 	c := &Commander{}
 	if err := yaml.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("fail tp unmarshal commands yaml with error: %+v", err)
+		return nil, fmt.Errorf("fail to unmarshal commands yaml with error: %+v", err)
 	}
 
 	// TODO (sbezverk) Add logic validation of parameters
@@ -49,7 +49,9 @@ func parseCommandFile(b []byte) (*Commander, error) {
 					return nil, fmt.Errorf("fail to compile regular expression %q with error: %+v", p.PatternString, err)
 				}
 				p.RegExp = re
-				p.Capture.Values = make(map[int]interface{})
+				if p.Capture != nil {
+					p.Capture.Values = make(map[int]interface{})
+				}
 				// Store used to keep per iterations collected values
 				p.ValuesStore = make(map[int]map[int]interface{})
 			}

@@ -207,9 +207,9 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
 	startPartial := commandParts[0]
-	if len(commandParts) > 1 {
-		startPartial += `\s+` + commandParts[1] + `\s*`
-	}
+	// if len(commandParts) > 1 {
+	// 	startPartial += `\s+` + commandParts[1] + `\s*`
+	// }
 	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
