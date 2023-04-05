@@ -28,7 +28,7 @@ func readCommandFile(fn string) ([]byte, error) {
 func parseCommandFile(b []byte) (*Commander, error) {
 	c := &Commander{}
 	if err := yaml.Unmarshal(b, c); err != nil {
-		return nil, fmt.Errorf("fail tp unmarshal commands yaml with error: %+v", err)
+		return nil, fmt.Errorf("fail to unmarshal commands yaml with error: %+v", err)
 	}
 
 	// TODO (sbezverk) Add logic validation of parameters
@@ -41,7 +41,7 @@ func parseCommandFile(b []byte) (*Commander, error) {
 		hc = true
 	}
 	// Compile Regular Expressions only if Health Check is requested
-	for _, cmd := range c.List {
+	for _, cmd := range c.MainCommandGroup {
 		if hc || cmd.ProcessResult {
 			for _, p := range cmd.Patterns {
 				re, err := regexp.Compile(p.PatternString)
@@ -49,11 +49,31 @@ func parseCommandFile(b []byte) (*Commander, error) {
 					return nil, fmt.Errorf("fail to compile regular expression %q with error: %+v", p.PatternString, err)
 				}
 				p.RegExp = re
+				if p.Capture != nil {
+					p.Capture.Values = make(map[int]interface{})
+				}
+				// Store used to keep per iterations collected values
+				p.ValuesStore = make(map[int]map[int]interface{})
 			}
 		}
 	}
-
-	// TODO (sbezverk) Add processing patterns for repro section
+	// Populating Special Captured Values Processing  map
+	if c.Repro != nil {
+		// First Key is command, second Key is pattern , third key is field number
+		c.Repro.CapturedValuesProcessing = map[string]map[string]map[int]*CapturedValue{}
+		c.Repro.PerCmdPerPatternCommands = make(map[string]map[string][]*Command)
+		for _, cpr := range c.Repro.CommandProcessingRules {
+			c.Repro.CapturedValuesProcessing[cpr.Cmd] = make(map[string]map[int]*CapturedValue)
+			c.Repro.PerCmdPerPatternCommands[cpr.Cmd] = make(map[string][]*Command)
+			for _, p := range cpr.Patterns {
+				c.Repro.CapturedValuesProcessing[cpr.Cmd][p.PatternString] = make(map[int]*CapturedValue)
+				c.Repro.PerCmdPerPatternCommands[cpr.Cmd][p.PatternString] = p.PatternCommands
+				for _, f := range p.CapturedValuesProcessing {
+					c.Repro.CapturedValuesProcessing[cpr.Cmd][p.PatternString][f.FieldNumber] = f
+				}
+			}
+		}
+	}
 
 	return c, nil
 

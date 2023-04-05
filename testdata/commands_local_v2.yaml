@@ -25,7 +25,7 @@ repro:
     #
     # command tag must match to one of the command tag from the main_command_group, under
     # this tag the special instructions for its processing are listed.
-    - command: "run netstat -s -udp"
+    - command: "netstat -s -p udp"
       patterns:
         #
         # the value of the pattern_string must match to one of the patterns defined for the command in the main_command_group.
@@ -43,27 +43,25 @@ repro:
               operation: "compare_with_previous_neq"
               # value:
           pattern_commands:
-            - command: "run netstat -aup | grep tcp"
+            - command: "netstat -aup | grep tcp"
           # Defines if all operations must return true or not to consider
           check_all_results: true
   #
   # Defines a list of global post mortem commands which will be executed
   # regardless which command and pattern triggered the match.
   postmortem_command_group:
-    - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
+    - command: bash -c for i in {1..20}; do date +"%T. %3N"; netstat -s -p udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done
 #
 # Defines a command group used  to either collect information as in case of collect mode,
 # or to reproduce an issue as in case of repro mode.
 main_command_group:
-  - command: "run netstat -s -udp"
+  - command: "netstat -s -p udp"
     process_result: true
     patterns:
       - pattern_string: 'InMcastPkts:\s*[0-9+]'
         capture:
-          # Defines an array of fields to capture from a string matched by the pattern
+          # Defines an array of fields to capture from a  string matched by the pattern
           field_number: [2]
-          # Defines a separator character used on the matched line to separate fields
           separator: ":"
-          # In case there are multiple matches, occurrence allow to select which occurence to use to capture field(s)
           occurrence: 1
     debug: false

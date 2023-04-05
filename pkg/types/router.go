@@ -35,8 +35,9 @@ func (r *router) GetLogger() log.Logger {
 }
 
 type CmdResult struct {
-	Cmd    string
-	Result []byte
+	Cmd            string
+	Result         []byte
+	CapturedValues map[int]interface{}
 }
 
 func Delay(d int) {
@@ -54,6 +55,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.WaitBefore != 0 {
 		Delay(cmd.WaitBefore)
 	}
+
 	if len(cmd.Location) == 0 {
 		var err error
 		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
@@ -205,9 +207,9 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
 	startPartial := commandParts[0]
-	if len(commandParts) > 1 {
-		startPartial += `\s+` + commandParts[1] + `\s*`
-	}
+	// if len(commandParts) > 1 {
+	// 	startPartial += `\s+` + commandParts[1] + `\s*`
+	// }
 	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
@@ -222,11 +224,11 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	startFound := false
 	endFound := false
 	go func(done chan []byte, eCh chan error) {
-		l := make([]byte, 1024)
+		lb := make([]byte, 1024)
 		cmdFound := false
 		for {
-			if n, err := stdout.Read(l); err == nil {
-				copy(fullInput[index:index+n], l)
+			if n, err := stdout.Read(lb); err == nil {
+				copy(fullInput[index:index+n], lb)
 				index += n
 				if !cmdFound {
 					ns := startPattern.FindIndex(fullInput[:index])
@@ -262,9 +264,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		l.Log([]byte("=========> " + cmd + "\n"))
 	}
 	if debug {
-		if !strings.HasPrefix(cmd, "term") {
-			glog.Infof("Sending \"%s\"", cmd)
-		}
+		glog.Infof("Sending \"%s\"", cmd)
 	}
 	if _, err := fmt.Fprintf(stdin, "%s\n", cmd); err != nil {
 		return nil, fmt.Errorf("failed to send command %s  with error: %+v", cmd, err)

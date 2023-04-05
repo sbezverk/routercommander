@@ -15,27 +15,40 @@ type Command struct {
 }
 
 type Repro struct {
-	Times          int        `yaml:"times"`
-	Interval       int        `yaml:"interval"`
-	PostMortemList []*Command `yaml:"postmortem_commands"`
+	Times                    int        `yaml:"times"`
+	Interval                 int        `yaml:"interval"`
+	CommandProcessingRules   []*Command `yaml:"command_processing_rules"`
+	PostMortemCommandGroup   []*Command `yaml:"postmortem_command_group"`
+	CapturedValuesProcessing map[string]map[string]map[int]*CapturedValue
+	PerCmdPerPatternCommands map[string]map[string][]*Command
 }
 type Collect struct {
 	HealthCheck bool `yaml:"health_check"`
 }
 type Commander struct {
-	List    []*Command `yaml:"commands"`
-	Repro   *Repro     `yaml:"repro"`
-	Collect *Collect   `yaml:"collect"`
+	MainCommandGroup []*Command `yaml:"main_command_group"`
+	Repro            *Repro     `yaml:"repro"`
+	Collect          *Collect   `yaml:"collect"`
 }
 
+type CapturedValue struct {
+	FieldNumber int    `yaml:"field_number"`
+	Operation   string `yaml:"operation"`
+	Result      interface{}
+}
 type Pattern struct {
-	PatternString string   `yaml:"pattern_string"`
-	Capture       *Capture `yaml:"capture"`
-	RegExp        *regexp.Regexp
+	PatternString            string           `yaml:"pattern_string"`
+	Capture                  *Capture         `yaml:"capture"`
+	CapturedValuesProcessing []*CapturedValue `yaml:"captured_values"`
+	PatternCommands          []*Command       `yaml:"pattern_commands"`
+	CheckAllResults          bool             `yaml:"check_all_results"`
+	RegExp                   *regexp.Regexp
+	ValuesStore              map[int]map[int]interface{}
 }
 
 type Capture struct {
-	FieldNumber int    `yaml:"field_number"`
+	FieldNumber []int  `yaml:"field_number"`
 	Separator   string `yaml:"separator"`
-	Value       interface{}
+	Occurrence  int    `yaml:"occurrence"`
+	Values      map[int]interface{}
 }
