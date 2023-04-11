@@ -36,7 +36,7 @@ var Location = regexp.MustCompile(`\d+\/(RP)?\d+\/CPU0\s+[a-zA-Z0-9\-\(\)]+\s+IO
 
 var ActiveMember = regexp.MustCompile(`\w+[0-9](/[0-9]+)*\s+\w+\s+Active\s+.*`)
 
-var Prompt = regexp.MustCompile(`(?m)RP\/\d\/(RP)?\d\/CPU[0-9]:[0-9A-Za-z-\.\_]+(\([0-9A-Za-z-\.\_]+\))?#(\n|$)`)
+var Prompt = regexp.MustCompile(`(?m)RP\/\d\/(R[S]?P)?\d\/CPU[0-9]:[0-9A-Za-z-\.\_]+(\([0-9A-Za-z-\.\_]+\))?#(\n|$)`)
 
 // Regular expressions used for parsing  show route  output
 var IPv4 = regexp.MustCompile(`(?m)(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\,\s+from`)
