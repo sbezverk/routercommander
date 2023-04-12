@@ -42,7 +42,7 @@ func init() {
 	flag.StringVar(&rtrFile, "routers-file", "", "File with routers' names")
 	flag.StringVar(&cmdFile, "commands-file", "", "YAML formated file with commands to collect")
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
-	flag.StringVar(&login, "username", "admin", "username to use to ssh to a router")
+	flag.StringVar(&login, "username", "", "username to use to ssh to a router")
 	flag.StringVar(&pass, "password", "", "Password to use for ssh session")
 	flag.IntVar(&port, "port", 22, "Port to use for SSH sessions, default 22")
 	flag.BoolVar(&notify, "notify", false, "If set to true, email notification will be send.")
