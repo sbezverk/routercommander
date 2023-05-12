@@ -147,14 +147,13 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 								break out
 							}
 						case "compare_with_value_neq":
-							//							glog.Infof("><SB> value: %s current value: %s", p.Capture.Values[f], v)
-							if v != p.Capture.Values[f] {
+							if v != fp.Value {
 								triggered = true
 								break out
 							}
 						case "compare_with_value_eq":
 							//							glog.Infof("><SB> value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
-							if v == p.Capture.Values[f] {
+							if v == fp.Value {
 								triggered = true
 								break out
 							}
@@ -180,23 +179,33 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 }
 
 func getValue(b []byte, index []int, capture *types.Capture) (map[int]interface{}, error) {
-	previousEndLine, err := regexp.Compile(`(?m)$`)
+	endLine, err := regexp.Compile(`(?m)$`)
 	if err != nil {
 		return nil, err
 	}
-	// First, find the start of the line with matching pattern
-	sIndex := previousEndLine.FindAllIndex(b[:index[0]], -1)
+	startLine, err := regexp.Compile(`(?m)^`)
+	if err != nil {
+		return nil, err
+	}
+	// First, find the end of the line with matching pattern
+	eIndex := endLine.FindIndex(b[index[0]:])
+	if eIndex == nil {
+		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[index[0]:]))
+	}
+	en := index[0] + eIndex[0]
+	// Second, find the start of the string with matching pattern
+	sIndex := startLine.FindAllIndex(b[:en-1], -1)
 	if sIndex == nil {
 		return nil, fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
 	}
-	// Second, find  the end of the string with matching pattern
-	eIndex := previousEndLine.FindIndex(b[sIndex[len(sIndex)-1][0]:])
-	if eIndex == nil {
-		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[sIndex[len(sIndex)-1][0]:]))
-	}
-	s := string(b[sIndex[len(sIndex)-1][0] : sIndex[len(sIndex)-1][0]+eIndex[0]])
+	st := sIndex[len(sIndex)-1][0]
+	s := string(b[st:en])
 	// Splitting the resulting string using provided separator
-	parts := strings.Split(s, capture.Separator)
+	separator, err := regexp.Compile("[" + capture.Separator + "]+")
+	if err != nil {
+		return nil, err
+	}
+	parts := separator.Split(s, -1)
 	m := make(map[int]interface{})
 	for _, f := range capture.FieldNumber {
 		if len(parts) < f-1 {

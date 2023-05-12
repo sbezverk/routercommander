@@ -34,6 +34,7 @@ type Commander struct {
 type CapturedValue struct {
 	FieldNumber int    `yaml:"field_number"`
 	Operation   string `yaml:"operation"`
+	Value       string `yaml:"value"`
 	Result      interface{}
 }
 type Pattern struct {
