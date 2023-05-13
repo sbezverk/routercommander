@@ -38,6 +38,7 @@ type CapturedValue struct {
 	Result      interface{}
 }
 type Pattern struct {
+	ID                       int              `yaml:"id"`
 	PatternString            string           `yaml:"pattern_string"`
 	Capture                  *Capture         `yaml:"capture"`
 	CapturedValuesProcessing []*CapturedValue `yaml:"captured_values"`

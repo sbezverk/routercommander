@@ -1,0 +1,208 @@
+#
+# In collect mode, routercommander collects the output of commands defined under main_command_group tag
+# if commands do not have patterns to look for a specific text in the output or matching against patterns
+# is not required, health_check should be set to false.
+collect:
+  health_check: false
+#
+# In repro mode, the commands defined under the main_command_group tag are  used to trigger and detect
+# a specific issue. In most common case, after the issue is triggered, commands defined by
+# postmortem_command_group is collected.
+# command_processing_rules is optional and considered an advanced feature which allow further
+# customization of the commands to execute as a part of the postmortem.
+repro:
+  #
+  # times defines a number of iterations main_command_group is executed.
+  times: 1000
+  #
+  # interval defines an interval between iterations.
+  interval: 10
+  #
+  # command_processing_rules optional and advanced feature,
+  # defines special processing rules for a command which triggered the match.
+  # Optional if no special processing is needed.
+  command_processing_rules:
+    #
+    # command tag must match to one of the command tag from the main_command_group, under
+    # this tag the special instructions for its processing are listed.
+    - command: "bash netstat -tunlp"
+      tests:
+        - id: 1
+          pattern_string: ':9449'
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_value_neq"
+              value: "0.0.0.0:9449"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
+          # Defines if all operations must return true or not to consider, applicable
+          # for a multi fields case
+          check_all_results: true
+        - id: 2
+          pattern_string: ':10000'
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_value_neq"
+              value: "0.0.0.0:10000"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
+          # Defines if all operations must return true or not to consider, applicable
+          # for a multi fields case
+        - id: 3
+          pattern_string: ':9449'
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_value_neq"
+              value: "1.1.1.1:9449"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
+          # Defines if all operations must return true or not to consider, applicable
+          # for a multi fields case
+        - id: 4
+          pattern_string: ':10000'
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "compare_with_value_neq"
+              value: "1.1.1.1:10000"
+                        # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
+          # Defines if all operations must return true or not to consider, applicable
+          # for a multi fields case
+
+  #
+  # Defines a list of global post mortem commands which will be executed
+  # regardless which command and pattern triggered the match.
+  postmortem_command_group:
+    - command: 'bash netstat -tunlp'
+#
+# Defines a command group used  to either collect information as in case of collect mode,
+# or to reproduce an issue as in case of repro mode.
+main_command_group:
+  # Test 1 simple gNMI service configuration with default port 9449
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 0.0.0.0:9449 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 1
+    patterns:
+      - pattern_string: ":9449"
+  # Test 2 simple gNMI service configuration with default port 10000
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "port 10000"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 0.0.0.0:10000 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 2
+    patterns:
+      - pattern_string: ":10000"
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "no port 10000"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 0.0.0.0:9449 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 1
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "no gnmi"
+  - command: "commit"
+  - command: "end"
+  # Apply listen-address command and repeat tests
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "listen-addresses 1.1.1.1"
+  - command: "commit"
+  - command: "end"
+  # Test 21 simple gNMI service configuration with default port 9449
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 1.1.1.1:9449 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 3
+  # Test 22 simple gNMI service configuration with custom port 10000
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "port 10000"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 1.1.1.1:10000 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 4
+  # Test 23 simple gNMI service confiugration with default port 9449
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "gnmi"
+  - command: "no port 10000"
+  - command: "commit"
+  - command: "end"
+  # Check if there is 1.1.1.1:9449 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 3
+  # Restoring default configuration
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "no gnmi"
+  - command: "commit"
+  - command: "end"
+  # Remove listen-address command and repeat tests
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "no listen-address 1.1.1.1"
+  - command: "commit"
+  - command: "end"
