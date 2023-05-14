@@ -52,13 +52,7 @@ func TestParseCommandFile(t *testing.T) {
 						Patterns: []*Pattern{
 							{
 								PatternString: `SndbufErrors:\s*[0-9+]`,
-								Capture: &Capture{
-
-									FieldNumber: []int{2},
-									Separator:   ":",
-									Values:      make(map[int]interface{}),
-								},
-								RegExp: getRegExp(`SndbufErrors:\s*[0-9+]`),
+								RegExp:        getRegExp(`SndbufErrors:\s*[0-9+]`),
 							},
 						},
 					},

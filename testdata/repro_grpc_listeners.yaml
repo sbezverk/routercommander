@@ -13,7 +13,7 @@ collect:
 repro:
   #
   # times defines a number of iterations main_command_group is executed.
-  times: 1000
+  times: 1
   #
   # interval defines an interval between iterations.
   interval: 10
@@ -28,7 +28,9 @@ repro:
     - command: "bash netstat -tunlp"
       tests:
         - id: 1
-          pattern_string: ':9449'
+          pattern:
+            pattern_string: ':9449'
+          field_separator: " "
           fields:
             - field_number: 4
               #
@@ -46,7 +48,9 @@ repro:
           # for a multi fields case
           check_all_results: true
         - id: 2
-          pattern_string: ':10000'
+          pattern:
+            pattern_string: ':10000'
+          field_separator: " "
           fields:
             - field_number: 4
               #
@@ -63,7 +67,9 @@ repro:
           # Defines if all operations must return true or not to consider, applicable
           # for a multi fields case
         - id: 3
-          pattern_string: ':9449'
+          pattern:
+            pattern_string: ':9449'
+          field_separator: " "
           fields:
             - field_number: 4
               #
@@ -80,7 +86,9 @@ repro:
           # Defines if all operations must return true or not to consider, applicable
           # for a multi fields case
         - id: 4
-          pattern_string: ':10000'
+          pattern:
+            pattern_string: ':10000'
+          field_separator: " "
           fields:
             - field_number: 4
               #
@@ -94,9 +102,16 @@ repro:
                         # Command to execute if condition is met
           if_triggered_commands:
             - command: "show proc emsd"
-          # Defines if all operations must return true or not to consider, applicable
-          # for a multi fields case
-
+        - id: 5
+          pattern:
+            pattern_string: ':9449'
+          number_of_occurrences: 4
+        - id: 6
+          pattern:
+            pattern_string: ':9449'
+          number_of_occurrences: 3
+        # Defines if all operations must return true or not to consider, applicable
+        # for a multi fields case
   #
   # Defines a list of global post mortem commands which will be executed
   # regardless which command and pattern triggered the match.
@@ -192,6 +207,25 @@ main_command_group:
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 3
+  # Test with multiple listenets
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "listen-addresses 1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4"
+  - command: "commit"
+  - command: "end"
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 5
+  - command: "configure term"
+    wait_before: 2
+  - command: "grpc"
+  - command: "listen-addresses 1.1.1.1 2.2.2.2 4.4.4.4"
+  - command: "commit"
+  - command: "end"
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 6
   # Restoring default configuration
   - command: "configure term"
     wait_before: 2
