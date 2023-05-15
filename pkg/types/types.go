@@ -4,6 +4,7 @@ import "regexp"
 
 type Command struct {
 	Cmd           string     `yaml:"command"`
+	CmdTimeout    int        `yaml:"command_timeout"`
 	Times         int        `yaml:"times"`
 	Interval      int        `yaml:"interval"`
 	WaitBefore    int        `yaml:"wait_before"`
