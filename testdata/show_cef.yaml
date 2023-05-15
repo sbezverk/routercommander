@@ -1,4 +1,6 @@
-commands:
+collect:
+  health_check: true
+main_command_group:
   - command: show cef drops
     times: 1
     interval: 1

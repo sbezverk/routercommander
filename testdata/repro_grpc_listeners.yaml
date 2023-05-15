@@ -31,6 +31,7 @@ repro:
           pattern:
             pattern_string: ':9449'
           field_separator: " "
+          check_all_results: true
           fields:
             - field_number: 4
               #
@@ -51,6 +52,7 @@ repro:
           pattern:
             pattern_string: ':10000'
           field_separator: " "
+          check_all_results: true
           fields:
             - field_number: 4
               #
@@ -70,6 +72,7 @@ repro:
           pattern:
             pattern_string: ':9449'
           field_separator: " "
+          check_all_results: true
           fields:
             - field_number: 4
               #
@@ -89,6 +92,7 @@ repro:
           pattern:
             pattern_string: ':10000'
           field_separator: " "
+          check_all_results: true
           fields:
             - field_number: 4
               #
@@ -110,6 +114,43 @@ repro:
           pattern:
             pattern_string: ':9449'
           number_of_occurrences: 3
+        - id: 7
+          pattern:
+            pattern_string: ':9449'
+          field_separator: " "
+          check_all_results: true
+          occurrence: 3
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "contain_substring"
+              value: ":9449"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
+        - id: 8
+          pattern:
+            pattern_string: ':9449'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              #
+              # Defines operations to undertake on the captured value of the specific field.
+              # compare_with_previous_eq
+              # compare_with_previous_neq
+              # compare_with_value_eq
+              # compare_with_value_neq
+              operation: "not_contain_substring"
+              value: "3.3.3.3"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "show proc emsd"
         # Defines if all operations must return true or not to consider, applicable
         # for a multi fields case
   #
@@ -121,10 +162,14 @@ repro:
 # Defines a command group used  to either collect information as in case of collect mode,
 # or to reproduce an issue as in case of repro mode.
 main_command_group:
-  # Test 1 simple gNMI service configuration with default port 9449
+  # Clean up before running tests
   - command: "configure term"
     wait_before: 2
   - command: "grpc"
+  - command: "no listen-addresses"
+  - command: "no gnmi"
+  - command: "commit"
+  # Condigure gnmi with default config
   - command: "gnmi"
   - command: "commit"
   - command: "end"
@@ -223,9 +268,18 @@ main_command_group:
   - command: "listen-addresses 1.1.1.1 2.2.2.2 4.4.4.4"
   - command: "commit"
   - command: "end"
+# Test if number of listening address is 3
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 6
+# Test if 3.3.3.3 is not seen in the output
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 8
+# Test that 3rd listener exists and == 1.1.1.1:9449
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 7
   # Restoring default configuration
   - command: "configure term"
     wait_before: 2
