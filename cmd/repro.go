@@ -126,7 +126,7 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 		p := test.Pattern.RegExp
 		matches := p.FindAllIndex(re.Result, -1)
 		if matches == nil {
-			glog.Warningf("Pattern %s is not found in result output: %s", p.String(), string(re.Result))
+			glog.Warningf("Test ID: %d Command: %q pattern %q is not found", c.TestID, c.Cmd, p.String())
 			continue
 		}
 		// glog.Infof("><SB> Pattern %s is found in result", p.String())
