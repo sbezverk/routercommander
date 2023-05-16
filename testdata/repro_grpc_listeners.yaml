@@ -13,7 +13,7 @@ collect:
 repro:
   #
   # times defines a number of iterations main_command_group is executed.
-  times: 1
+  times: 100
   #
   # interval defines an interval between iterations.
   interval: 10
@@ -34,19 +34,8 @@ repro:
           check_all_results: true
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "compare_with_value_neq"
               value: "0.0.0.0:9449"
-                    # Command to execute if condition is met
-          if_triggered_commands:
-            - command: "show proc emsd"
-          # Defines if all operations must return true or not to consider, applicable
-          # for a multi fields case
           check_all_results: true
         - id: 2
           pattern:
@@ -55,19 +44,8 @@ repro:
           check_all_results: true
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "compare_with_value_neq"
               value: "0.0.0.0:10000"
-                    # Command to execute if condition is met
-          if_triggered_commands:
-            - command: "show proc emsd"
-          # Defines if all operations must return true or not to consider, applicable
-          # for a multi fields case
         - id: 3
           pattern:
             pattern_string: ':9449'
@@ -75,19 +53,11 @@ repro:
           check_all_results: true
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "compare_with_value_neq"
               value: "1.1.1.1:9449"
                     # Command to execute if condition is met
           if_triggered_commands:
             - command: "show proc emsd"
-          # Defines if all operations must return true or not to consider, applicable
-          # for a multi fields case
         - id: 4
           pattern:
             pattern_string: ':10000'
@@ -95,17 +65,8 @@ repro:
           check_all_results: true
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "compare_with_value_neq"
               value: "1.1.1.1:10000"
-                        # Command to execute if condition is met
-          if_triggered_commands:
-            - command: "show proc emsd"
         - id: 5
           pattern:
             pattern_string: ':9449'
@@ -122,17 +83,8 @@ repro:
           occurrence: 3
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "contain_substring"
               value: ":9449"
-                    # Command to execute if condition is met
-          if_triggered_commands:
-            - command: "show proc emsd"
         - id: 8
           pattern:
             pattern_string: ':9449'
@@ -140,19 +92,47 @@ repro:
           check_all_results: true
           fields:
             - field_number: 4
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
               operation: "not_contain_substring"
               value: "3.3.3.3"
-                    # Command to execute if condition is met
-          if_triggered_commands:
-            - command: "show proc emsd"
-        # Defines if all operations must return true or not to consider, applicable
-        # for a multi fields case
+    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:10000"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+    - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+    - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
   #
   # Defines a list of global post mortem commands which will be executed
   # regardless which command and pattern triggered the match.
@@ -164,7 +144,6 @@ repro:
 main_command_group:
   # Clean up before running tests
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "no listen-addresses"
   - command: "no gnmi"
@@ -177,11 +156,12 @@ main_command_group:
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 1
-    patterns:
-      - pattern_string: ":9449"
+  # Checking for connectivity by using a gnmi client to default port 9449
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+    process_result: true
+    command_test_id: 1
   # Test 2 simple gNMI service configuration with default port 10000
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "gnmi"
   - command: "port 10000"
@@ -193,8 +173,15 @@ main_command_group:
     command_test_id: 2
     patterns:
       - pattern_string: ":10000"
+  # Checking for connectivity by using a gnmi client to default port 9449, it should fail
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+    process_result: true
+    command_test_id: 2
+  # Checking for connectivity by using a gnmi client to default port 9449, it should fail
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:10000"'
+    process_result: true
+    command_test_id: 1
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "gnmi"
   - command: "no port 10000"
@@ -205,21 +192,18 @@ main_command_group:
     process_result: true
     command_test_id: 1
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "no gnmi"
   - command: "commit"
   - command: "end"
   # Apply listen-address command and repeat tests
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1"
   - command: "commit"
   - command: "end"
   # Test 21 simple gNMI service configuration with default port 9449
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "gnmi"
   - command: "commit"
@@ -230,7 +214,6 @@ main_command_group:
     command_test_id: 3
   # Test 22 simple gNMI service configuration with custom port 10000
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "gnmi"
   - command: "port 10000"
@@ -242,7 +225,6 @@ main_command_group:
     command_test_id: 4
   # Test 23 simple gNMI service confiugration with default port 9449
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "gnmi"
   - command: "no port 10000"
@@ -254,7 +236,6 @@ main_command_group:
     command_test_id: 3
   # Test with multiple listenets
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4"
   - command: "commit"
@@ -262,8 +243,21 @@ main_command_group:
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 5
+  # Checking for connectivity by using a gnmi client to all configured
+  # listen addresses on default port 9449
+  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+    process_result: true
+    command_test_id: 1
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1 2.2.2.2 4.4.4.4"
   - command: "commit"
@@ -276,20 +270,34 @@ main_command_group:
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 8
-# Test that 3rd listener exists and == 1.1.1.1:9449
+# Test if now there are only 3 listening address for port 9449
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 7
+# Test connectivity again, connection to 3.3.3.3 should fail, but
+# the rest listeners should be ok
+  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+    process_result: true
+    command_test_id: 1
+    # This test should fail as listener 3.3.3.3 has been removed
+  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+    process_result: true
+    command_test_id: 2
+  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+    process_result: true
+    command_test_id: 1
+
   # Restoring default configuration
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "no gnmi"
   - command: "commit"
   - command: "end"
   # Remove listen-address command and repeat tests
   - command: "configure term"
-    wait_before: 2
   - command: "grpc"
   - command: "no listen-address 1.1.1.1"
   - command: "commit"
