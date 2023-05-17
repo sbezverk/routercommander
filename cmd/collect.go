@@ -11,7 +11,10 @@ import (
 func collect(r types.Router, commands *types.Commander, n messenger.Notifier) {
 	defer wg.Done()
 	glog.Infof("router %s: mode \"collect\"", r.GetName())
-	processResult := commands.Collect.HealthCheck
+	processResult := false
+	if commands.Collect != nil {
+		processResult = commands.Collect.HealthCheck
+	}
 
 	defer func() {
 		if n != nil {
@@ -50,6 +53,6 @@ func collect(r types.Router, commands *types.Commander, n messenger.Notifier) {
 				}
 			}
 		}
-		glog.Errorf("router %s: collection completed successfully.", r.GetName())
 	}
+	glog.Errorf("router %s: collection completed successfully.", r.GetName())
 }
