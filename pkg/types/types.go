@@ -26,10 +26,10 @@ type Repro struct {
 	Interval               int        `yaml:"interval"`
 	CommandProcessingRules []*Command `yaml:"command_processing_rules"`
 	PostMortemCommandGroup []*Command `yaml:"postmortem_command_group"`
+	StopWhenTriggered      bool       `yaml:"stop_when_triggered"`
 	// CommandTests defines map of commands, the key is command,
 	// the next level is map of tests, the key is test id
 	CommandTests map[string]map[int]*CommandTest
-	// PerCmdPerPatternCommands map[string]map[string][]*Command
 }
 
 type Collect struct {

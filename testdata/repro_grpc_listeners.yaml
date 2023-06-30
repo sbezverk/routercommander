@@ -25,76 +25,147 @@ repro:
     #
     # command tag must match to one of the command tag from the main_command_group, under
     # this tag the special instructions for its processing are listed.
+    - command: "commit"
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Failed to commit'
     - command: "bash netstat -tunlp"
       tests:
         - id: 1
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           field_separator: " "
           check_all_results: true
           fields:
             - field_number: 4
               operation: "compare_with_value_neq"
-              value: "0.0.0.0:9449"
+              value: "0.0.0.0:9339"
           check_all_results: true
         - id: 2
           pattern:
-            pattern_string: ':10000'
+            pattern_string: ':57401'
           field_separator: " "
           check_all_results: true
           fields:
             - field_number: 4
               operation: "compare_with_value_neq"
-              value: "0.0.0.0:10000"
+              value: "0.0.0.0:57401"
         - id: 3
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           field_separator: " "
           check_all_results: true
           fields:
             - field_number: 4
               operation: "compare_with_value_neq"
-              value: "1.1.1.1:9449"
-                    # Command to execute if condition is met
+              value: "1.1.1.1:9339"
+          # Command to execute if condition is met
           if_triggered_commands:
-            - command: "show proc emsd"
+            - command: "bash netstat -tunlp"
         - id: 4
           pattern:
-            pattern_string: ':10000'
+            pattern_string: ':57401'
           field_separator: " "
           check_all_results: true
           fields:
             - field_number: 4
               operation: "compare_with_value_neq"
-              value: "1.1.1.1:10000"
+              value: "1.1.1.1:57401"
         - id: 5
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           number_of_occurrences: 4
         - id: 6
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           number_of_occurrences: 3
         - id: 7
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           field_separator: " "
           check_all_results: true
           occurrence: 3
           fields:
             - field_number: 4
               operation: "contain_substring"
-              value: ":9449"
+              value: ":9339"
         - id: 8
           pattern:
-            pattern_string: ':9449'
+            pattern_string: ':9339'
           field_separator: " "
           check_all_results: true
           fields:
             - field_number: 4
               operation: "not_contain_substring"
               value: "3.3.3.3"
-    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+        - id: 11
+          pattern:
+            pattern_string: ':9340'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              operation: "compare_with_value_neq"
+              value: "0.0.0.0:9340"
+        - id: 12
+          pattern:
+            pattern_string: ':57401'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              operation: "compare_with_value_neq"
+              value: "0.0.0.0:57401"
+        - id: 13
+          pattern:
+            pattern_string: ':9340'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              operation: "compare_with_value_neq"
+              value: "1.1.1.1:9340"
+                    # Command to execute if condition is met
+          if_triggered_commands:
+            - command: "bash netstat -tunlp"
+        - id: 14
+          pattern:
+            pattern_string: ':57401'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              operation: "compare_with_value_neq"
+              value: "1.1.1.1:57401"
+        - id: 15
+          pattern:
+            pattern_string: ':9340'
+          number_of_occurrences: 4
+        - id: 16
+          pattern:
+            pattern_string: ':9340'
+          number_of_occurrences: 3
+        - id: 17
+          pattern:
+            pattern_string: ':9340'
+          field_separator: " "
+          check_all_results: true
+          occurrence: 3
+          fields:
+            - field_number: 4
+              operation: "contain_substring"
+              value: ":9340"
+        - id: 18
+          pattern:
+            pattern_string: ':9340'
+          field_separator: " "
+          check_all_results: true
+          fields:
+            - field_number: 4
+              operation: "not_contain_substring"
+              value: "3.3.3.3"
+    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9339"'
       tests:
         - id: 1
           pattern:
@@ -102,7 +173,7 @@ repro:
         - id: 2
           pattern:
             pattern_string: 'Result: Success'
-    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:10000"'
+    - command: 'bash gnmi_client_linux --grpc="127.0.0.1:57401"'
       tests:
         - id: 1
           pattern:
@@ -110,17 +181,17 @@ repro:
         - id: 2
           pattern:
             pattern_string: 'Result: Success'
-    - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+    - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9339"'
       tests:
         - id: 1
           pattern:
             pattern_string: 'Result: Failure'
-    - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+    - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9339"'
       tests:
         - id: 1
           pattern:
             pattern_string: 'Result: Failure'
-    - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+    - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9339"'
       tests:
         - id: 1
           pattern:
@@ -128,7 +199,46 @@ repro:
         - id: 2
           pattern:
             pattern_string: 'Result: Success'
-    - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+    - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9339"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+    - command: 'bash gribi_client_linux --grpc="127.0.0.1:9340"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gribi_client_linux --grpc="127.0.0.1:57401"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gribi_client_linux --grpc="1.1.1.1:9340"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+    - command: 'bash gribi_client_linux --grpc="2.2.2.2:9340"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+    - command: 'bash gribi_client_linux --grpc="3.3.3.3:9340"'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'Result: Failure'
+        - id: 2
+          pattern:
+            pattern_string: 'Result: Success'
+    - command: 'bash gribi_client_linux --grpc="4.4.4.4:9340"'
       tests:
         - id: 1
           pattern:
@@ -146,147 +256,276 @@ main_command_group:
   - command: "configure term"
   - command: "grpc"
   - command: "no listen-addresses"
+  - command: "no gribi"
   - command: "no gnmi"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   # Condigure gnmi with default config
   - command: "gnmi"
+  - command: "gribi"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 0.0.0.0:9449 entry
+  # Check if there is 0.0.0.0:9339 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 1
-  # Checking for connectivity by using a gnmi client to default port 9449
-  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+  # Checking for connectivity by using a gnmi client to default port 9339
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9339"'
     process_result: true
     command_test_id: 1
-  # Test 2 simple gNMI service configuration with default port 10000
+
+  # Check if there is 0.0.0.0:9340 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 11
+  # Checking for connectivity by using a gnmi client to default port 9339
+  - command: 'bash gribi_client_linux --grpc="127.0.0.1:9340"'
+    process_result: true
+    command_test_id: 1
+
+  # Test 2 simple gNMI service configuration with default port 57401
   - command: "configure term"
   - command: "grpc"
   - command: "gnmi"
-  - command: "port 10000"
+  - command: "port 57401"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 0.0.0.0:10000 entry
+  # Check if there is 0.0.0.0:57401 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 2
     patterns:
-      - pattern_string: ":10000"
-  # Checking for connectivity by using a gnmi client to default port 9449, it should fail
-  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9449"'
+      - pattern_string: ":57401"
+  # Checking for connectivity by using a gnmi client to default port 9339, it should fail
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:9339"'
     process_result: true
     command_test_id: 2
-  # Checking for connectivity by using a gnmi client to default port 9449, it should fail
-  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:10000"'
+  # Checking for connectivity by using a gnmi client to non default port 57401, it should succeed
+  - command: 'bash gnmi_client_linux --grpc="127.0.0.1:57401"'
+    process_result: true
+    command_test_id: 1
+
+  # Test 2 simple gNMI service configuration with default port 57401
+  - command: "configure term"
+  - command: "grpc"
+  - command: "gribi"
+  - command: "port 57401"
+  - command: "commit"
+    process_results: true
+    command_test_id: 1
+  - command: "end"
+  # Check if there is 0.0.0.0:57401 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 12
+    patterns:
+      - pattern_string: ":57401"
+  # Checking for connectivity by using a gribi client to default port 9340, it should fail
+  - command: 'bash gribi_client_linux --grpc="127.0.0.1:9340"'
+    process_result: true
+    command_test_id: 2
+  # Checking for connectivity by using a gribi client to non default port 57401, it should succeed
+  - command: 'bash gribi_client_linux --grpc="127.0.0.1:57401"'
     process_result: true
     command_test_id: 1
   - command: "configure term"
   - command: "grpc"
   - command: "gnmi"
-  - command: "no port 10000"
+  - command: "no port"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 0.0.0.0:9449 entry
+  # Check if there is 0.0.0.0:9339 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 1
   - command: "configure term"
   - command: "grpc"
-  - command: "no gnmi"
+  - command: "gribi"
+  - command: "no port"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
+  - command: "end"
+  # Check if there is 0.0.0.0:9340 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 11
+  - command: "configure term"
+  - command: "grpc"
+  - command: "no gnmi"
+  - command: "no gribi"
+  - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
   # Apply listen-address command and repeat tests
   - command: "configure term"
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Test 21 simple gNMI service configuration with default port 9449
+  # Test 21 simple gNMI service configuration with default port 9339
   - command: "configure term"
   - command: "grpc"
   - command: "gnmi"
+  - command: "gribi"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 1.1.1.1:9449 entry
+  # Check if there is 1.1.1.1:9339 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 3
-  # Test 22 simple gNMI service configuration with custom port 10000
+  # Check if there is 1.1.1.1:9340 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 13
+  # Test 22 simple gNMI service configuration with custom port 57401
   - command: "configure term"
   - command: "grpc"
   - command: "gnmi"
-  - command: "port 10000"
+  - command: "port 57401"
+  - command: "gribi"
+  - command: "port 57401"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 1.1.1.1:10000 entry
+  # Check if there is 1.1.1.1:57401 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 4
-  # Test 23 simple gNMI service confiugration with default port 9449
+    # Check if there is 1.1.1.1:57401 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 14
+  # Test 23 simple gNMI service confiugration with default port 9339
   - command: "configure term"
   - command: "grpc"
   - command: "gnmi"
-  - command: "no port 10000"
+  - command: "no port"
+  - command: "gribi"
+  - command: "no port"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
-  # Check if there is 1.1.1.1:9449 entry
+  # Check if there is 1.1.1.1:9339 entry
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 3
+    # Check if there is 1.1.1.1:9340 entry
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 13
+
   # Test with multiple listenets
   - command: "configure term"
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1 2.2.2.2 3.3.3.3 4.4.4.4"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 5
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 15
   # Checking for connectivity by using a gnmi client to all configured
-  # listen addresses on default port 9449
-  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+  # listen addresses on default port 9339
+  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9339"'
     process_result: true
     command_test_id: 1
-  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9339"'
     process_result: true
     command_test_id: 1
-  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9339"'
     process_result: true
     command_test_id: 1
-  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9339"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gribi_client_linux --grpc="1.1.1.1:9340"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gribi_client_linux --grpc="2.2.2.2:9340"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gribi_client_linux --grpc="3.3.3.3:9340"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gribi_client_linux --grpc="4.4.4.4:9340"'
     process_result: true
     command_test_id: 1
   - command: "configure term"
   - command: "grpc"
   - command: "listen-addresses 1.1.1.1 2.2.2.2 4.4.4.4"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
 # Test if number of listening address is 3
+#gNMI
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 6
+#gRIBI
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 16
 # Test if 3.3.3.3 is not seen in the output
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 8
-# Test if now there are only 3 listening address for port 9449
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 18
+# Test if now there are only 3 listening address for port 9339
   - command: "bash netstat -tunlp"
     process_result: true
     command_test_id: 7
+  - command: "bash netstat -tunlp"
+    process_result: true
+    command_test_id: 17
 # Test connectivity again, connection to 3.3.3.3 should fail, but
 # the rest listeners should be ok
-  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9449"'
+  - command: 'bash gnmi_client_linux --grpc="1.1.1.1:9339"'
     process_result: true
     command_test_id: 1
-  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9449"'
+  - command: 'bash gnmi_client_linux --grpc="2.2.2.2:9339"'
     process_result: true
     command_test_id: 1
     # This test should fail as listener 3.3.3.3 has been removed
-  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9449"'
+  - command: 'bash gnmi_client_linux --grpc="3.3.3.3:9339"'
     process_result: true
     command_test_id: 2
-  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9449"'
+  - command: 'bash gnmi_client_linux --grpc="4.4.4.4:9339"'
+    process_result: true
+    command_test_id: 1
+
+  - command: 'bash gribi_client_linux --grpc="1.1.1.1:9340"'
+    process_result: true
+    command_test_id: 1
+  - command: 'bash gribi_client_linux --grpc="2.2.2.2:9340"'
+    process_result: true
+    command_test_id: 1
+    # This test should fail as listener 3.3.3.3 has been removed
+  - command: 'bash gribi_client_linux --grpc="3.3.3.3:9340"'
+    process_result: true
+    command_test_id: 2
+  - command: 'bash gribi_client_linux --grpc="4.4.4.4:9340"'
     process_result: true
     command_test_id: 1
 
@@ -294,11 +533,16 @@ main_command_group:
   - command: "configure term"
   - command: "grpc"
   - command: "no gnmi"
+  - command: "no gribi"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"
   # Remove listen-address command and repeat tests
   - command: "configure term"
   - command: "grpc"
   - command: "no listen-address 1.1.1.1"
   - command: "commit"
+    process_results: true
+    command_test_id: 1
   - command: "end"

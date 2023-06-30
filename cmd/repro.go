@@ -76,6 +76,9 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 func processReproGroupOfCommands(r types.Router, commands []*types.Command, iteration int, repro *types.Repro) (bool, error) {
 	var test *types.CommandTest
 	triggered := false
+	if repro == nil {
+		return false, fmt.Errorf("repro section is nil")
+	}
 	for _, c := range commands {
 		results, err := r.ProcessCommand(c, true)
 		if err != nil {
@@ -86,7 +89,6 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 			return false, fmt.Errorf("command %q prodiced no results", c.Cmd)
 		}
 		re := results[0]
-		//		glog.Infof("><SB> Command: %q", c.Cmd)
 		if repro == nil {
 			continue
 		}
@@ -96,14 +98,11 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 		tests, ok := repro.CommandTests[c.Cmd]
 		if !ok {
 			// There is no test for the command, continue
-			//			glog.Warningf("><SB> No tests found for Command: %q", c.Cmd)
 			continue
 		}
-		// glog.Warningf("><SB> Tests found for Command: %q", c.Cmd)
 		test, ok = tests[c.TestID]
 		if !ok {
 			// The command specifies a non existing Test ID, continue
-			//			glog.Warningf("><SB> No test ID %d is found for Command: %q", c.TestID, c.Cmd)
 			continue
 		}
 		glog.Infof("Executing Test ID %d for Command: %q", c.TestID, c.Cmd)
@@ -118,7 +117,7 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 			// By some reason regular expression has not been initialized, attempting to compile it
 			p, err := regexp.Compile(test.Pattern.PatternString)
 			if err != nil {
-				glog.Warningf("Fail to compile regular experssion for command %d test id %d with error: %+v", c.Cmd, c.TestID, err)
+				glog.Warningf("Fail to compile regular experssion for command %s test id %d with error: %+v", c.Cmd, c.TestID, err)
 				continue
 			}
 			test.Pattern.RegExp = p
@@ -129,7 +128,6 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 			glog.Warningf("Test ID: %d Command: %q pattern %q is not found", c.TestID, c.Cmd, p.String())
 			continue
 		}
-		// glog.Infof("><SB> Pattern %s is found in result", p.String())
 		// Test the number of hits of the patter, if does not match, considered the issue triggered
 		if test.NumberOfOccurences != nil {
 			// glog.Infof("><SB> Number of instances test for command: %q result: %s", c.Cmd, string(re.Result))
@@ -144,7 +142,6 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 			}
 			continue
 		}
-		// glog.Warningf("><SB> Pattern for command %q test id %d was found %d time(s)", c.Cmd, test.ID, len(i))
 		if len(matches) <= test.Occurrence-1 {
 			// Test requesting to check specific occurrence number, but the number of found occurrences is less
 			glog.Infof("router %s: found matching line: %q, command: %q but the requested occurrence %d is more than the number of found occurrences %d",
@@ -152,7 +149,6 @@ func processReproGroupOfCommands(r types.Router, commands []*types.Command, iter
 			triggered = true
 			break
 		}
-		// glog.Warningf("><SB> Pattern for command %q test id %d has %d number of field(s)", c.Cmd, test.ID, len(test.Fields))
 		if len(test.Fields) == 0 {
 			// No fields related tests, but the match was found
 			glog.Infof("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[matches[0][0]:matches[0][1]]), "\n\r\t"), re.Cmd)

@@ -1,0 +1,63 @@
+repro:
+  times: 1
+  stop_when_triggered: false
+  command_processing_rules:
+    #
+    # command tag must match to one of the command tag from the main_command_group, under
+    # this tag the special instructions for its processing are listed.
+    - command: "admin show controller sfe driver location all"
+        - id: 1
+          pattern:
+            pattern_string: '0/FC[0-4]/[0-4]'
+          field_separator: "|"
+          fields:
+            - field_number: 2
+              operation: "compare_with_value_neq"
+              value: "UP"
+            - field_number: 4
+              operation: "compare_with_value_neq"
+              value: "UP/UP"
+            - field_number: 6
+              operation: "compare_with_value_neq"
+              value: "NRML"
+collect:
+  health_check: true
+main_command_group:
+  - command: show bundle brief
+    patterns:
+      - pattern_string: '[D|d][O|o][W|w][N|n]'
+  - command: show controllers npu resources all location all
+    patterns:
+      # To display NPU id in the output, not a problem indicating pattern
+      - pattern_string: 'Location:'
+      - pattern_string: 'NPU-[0-9]'
+      - pattern_string: 'OOR\s+State\s+:\s+(Red|Yellow)'
+  - command: show interface
+    patterns:
+      # To display interface name, not a problem indicating pattern
+      - pattern_string: 'is\s+up,\s+line\s+protocol\s+is\s+up'
+      - pattern_string: '.+?(\s+[1-9]+[0-9]*\s+total\s+input\s+drops)'
+      - pattern_string: '.+?(\s+[1-9]+[0-9]*\s+total\s+output\s+drops)'
+      - pattern_string: '.+?(\s+[1-9]+[0-9]*\s+CRC)'
+  - command: show asic-errors all summary location all
+    patterns:
+      - pattern_string: '.+?([0-9]{1}_[0-9]{1}_CPU0)'
+      - pattern_string: 'Unexpected\s+error\s+count\s*:\s*[1-9]+[0-9]*'
+      - pattern_string: 'SBE\s+error\s+count\s*:\s*[1-9]+[0-9]*'
+      - pattern_string: 'MBE\s+error\s+count\s*:\s*[1-9]+[0-9]*'
+      - pattern_string: 'Parity\s+error\s+count\s*:\s*[1-9]+[0-9]*'
+  - command: 'show logging'
+    patterns:
+      - pattern_string: 'DUMPER'
+      - pattern_string: 'OOR_'
+      - pattern_string: 'HW_PROG_ERROR'
+      - pattern_string: 'ASIC'
+      - pattern_string: 'FAB'
+      - pattern_string: 'PEER_DUP_ADDRS'
+  - command: admin show controller fabric plane all
+    pattern:
+      - `.+?(DN)`
+  - command: admin show controller sfe driver location all
+    process_result: true
+    command_test_id: 1
+
