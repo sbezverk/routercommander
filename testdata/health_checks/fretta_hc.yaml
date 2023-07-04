@@ -1,27 +1,25 @@
 repro:
   times: 1
   stop_when_triggered: false
-  command_processing_rules:
-    #
-    # command tag must match to one of the command tag from the main_command_group, under
-    # this tag the special instructions for its processing are listed.
-    - command: "admin show controller sfe driver location all"
-        - id: 1
-          pattern:
-            pattern_string: '0/FC[0-4]/[0-4]'
-          field_separator: "|"
-          fields:
-            - field_number: 2
-              operation: "compare_with_value_neq"
-              value: "UP"
-            - field_number: 4
-              operation: "compare_with_value_neq"
-              value: "UP/UP"
-            - field_number: 6
-              operation: "compare_with_value_neq"
-              value: "NRML"
+tests:
+  - command: "admin show controller sfe driver location all"
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: '0/FC[0-4]/[0-4]'
+      field_separator: "|"
+      fields:
+        - field_number: 2
+          operation: "compare_with_value_neq"
+          value: "UP"
+        - field_number: 4
+          operation: "compare_with_value_neq"
+          value: "UP/UP"
+        - field_number: 6
+          operation: "compare_with_value_neq"
+          value: "NRML"
 collect:
-  health_check: true
+  process_result: true
 main_command_group:
   - command: show bundle brief
     patterns:
