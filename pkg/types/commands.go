@@ -27,22 +27,21 @@ func readCommandFile(fn string) ([]byte, error) {
 
 func parseCommandFile(b []byte) (*Commander, error) {
 	c := &Commander{}
+	var err error
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("fail to unmarshal commands yaml with error: %+v", err)
 	}
 
-	// TODO (sbezverk) Add logic validation of parameters
-
-	hc := false
+	pr := false
 	if c.Collect != nil {
-		hc = c.Collect.HealthCheck
+		pr = c.Collect.ProcessResult
 	}
 	if c.Repro != nil {
-		hc = true
+		pr = true
 	}
 	// Compile Regular Expressions only if Health Check is requested
 	for _, cmd := range c.MainCommandGroup {
-		if hc || cmd.ProcessResult {
+		if pr || cmd.ProcessResult {
 			for _, p := range cmd.Patterns {
 				re, err := regexp.Compile(p.PatternString)
 				if err != nil {
@@ -51,21 +50,29 @@ func parseCommandFile(b []byte) (*Commander, error) {
 				p.RegExp = re
 			}
 		}
+		cmd.CommandResult = &CommandResult{
+			PatternMatch:  make(map[string][]string),
+			TriggeredTest: make([]int, 0),
+		}
 	}
-	// Populating Special Captured Values Processing  map
-	if c.Repro != nil {
-		// First Key is command, second Key is test ID for the command
-		c.Repro.CommandTests = make(map[string]map[int]*CommandTest)
-		for _, cpr := range c.Repro.CommandProcessingRules {
-			c.Repro.CommandTests[cpr.Cmd] = make(map[int]*CommandTest)
-			for _, p := range cpr.Tests {
-				if p.Pattern != nil {
-					p.Pattern.RegExp = regexp.MustCompile(p.Pattern.PatternString)
-				}
-				p.ValuesStore = make(map[int]map[int]interface{})
-				c.Repro.CommandTests[cpr.Cmd][p.ID] = p
 
+	if len(c.Tests) != 0 {
+		c.CommandsWithTests = make(map[string]*Tests)
+		for _, t := range c.Tests {
+			t.Tests = make(map[int]*Test)
+			for i := 0; i < len(t.Source); i++ {
+				// Making a map by test id for faster processing
+				e := t.Source[i]
+				if e.Pattern != nil {
+					e.Pattern.RegExp, err = regexp.Compile(e.Pattern.PatternString)
+					if err != nil {
+						return nil, err
+					}
+				}
+				e.ValuesStore = make(map[int]map[int]interface{})
+				t.Tests[t.Source[i].ID] = e
 			}
+			c.CommandsWithTests[t.Cmd] = t
 		}
 	}
 

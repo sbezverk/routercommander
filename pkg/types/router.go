@@ -41,7 +41,6 @@ func (r *router) GetLogger() log.Logger {
 type CmdResult struct {
 	Cmd    string
 	Result []byte
-	// CapturedValues map[int]interface{}
 }
 
 func Delay(d int) {

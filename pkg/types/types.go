@@ -13,33 +13,49 @@ type Command struct {
 	Debug         bool       `yaml:"debug"`
 	ProcessResult bool       `yaml:"process_result"`
 	Patterns      []*Pattern `yaml:"patterns"`
-	// Tests used in Repro mode
-	Tests []*CommandTest `yaml:"tests"`
 	// TestID used to logically connect the command
 	// from main_command_group to specific set of tests
-	// defined in repro mode
-	TestID int `yaml:"command_test_id"`
+	// defined in tests section for a specific command. If TestIDs are not specified
+	// then all tests defined for a specific command are executed.
+	TestIDs       []int `yaml:"command_test_ids"`
+	CommandResult *CommandResult
+}
+
+type Commander struct {
+	Repro             *Repro     `yaml:"repro"`
+	Collect           *Collect   `yaml:"collect"`
+	Tests             []*Tests   `yaml:"tests"`
+	MainCommandGroup  []*Command `yaml:"commands"`
+	CommandsWithTests map[string]*Tests
 }
 
 type Repro struct {
 	Times                  int        `yaml:"times"`
 	Interval               int        `yaml:"interval"`
-	CommandProcessingRules []*Command `yaml:"command_processing_rules"`
-	PostMortemCommandGroup []*Command `yaml:"postmortem_command_group"`
+	PostMortemCommandGroup []*Command `yaml:"if_triggered_commands"`
 	StopWhenTriggered      bool       `yaml:"stop_when_triggered"`
-	// CommandTests defines map of commands, the key is command,
-	// the next level is map of tests, the key is test id
-	CommandTests map[string]map[int]*CommandTest
 }
 
 type Collect struct {
-	HealthCheck bool `yaml:"health_check"`
+	ProcessResult bool `yaml:"process_result"`
 }
 
-type Commander struct {
-	MainCommandGroup []*Command `yaml:"main_command_group"`
-	Repro            *Repro     `yaml:"repro"`
-	Collect          *Collect   `yaml:"collect"`
+type Tests struct {
+	Cmd    string  `yaml:"command"`
+	Source []*Test `yaml:"command_tests"`
+	Tests  map[int]*Test
+}
+
+type Test struct {
+	ID                  int        `yaml:"id"`
+	Pattern             *Pattern   `yaml:"pattern"`
+	Occurrence          int        `yaml:"occurrence"`
+	NumberOfOccurences  *int       `yaml:"number_of_occurrences"`
+	Fields              []*Field   `yaml:"fields"`
+	Separator           string     `yaml:"separator"`
+	IfTriggeredCommands []*Command `yaml:"if_triggered_commands"`
+	CheckAllResults     bool       `yaml:"check_all_results"`
+	ValuesStore         map[int]map[int]interface{}
 }
 
 type Field struct {
@@ -49,20 +65,12 @@ type Field struct {
 	Result      interface{}
 }
 
-type CommandTest struct {
-	ID                  int        `yaml:"id"`
-	Pattern             *Pattern   `yaml:"pattern"`
-	Occurrence          int        `yaml:"occurrence"`
-	NumberOfOccurences  *int       `yaml:"number_of_occurrences"`
-	Fields              []*Field   `yaml:"fields"`
-	Separator           string     `yaml:"separator"`
-	IfTriggeredCommands []*Command `yaml:"if_triggered_commands"`
-	CheckAllResults     bool       `yaml:"check_all_results"`
-	RegExp              *regexp.Regexp
-	ValuesStore         map[int]map[int]interface{}
-}
-
 type Pattern struct {
 	PatternString string `yaml:"pattern_string"`
 	RegExp        *regexp.Regexp
+}
+
+type CommandResult struct {
+	PatternMatch  map[string][]string
+	TriggeredTest []int
 }

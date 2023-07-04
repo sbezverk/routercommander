@@ -1,0 +1,65 @@
+repro:
+  times: 1
+  interval: 60
+  if_triggered_commands:
+    - command: 'repro test command'            
+      command_timeout: 2
+      times: 1
+      interval: 1
+      wait_before: 1
+      wait_after: 1
+      location:
+      - 0/0/CPU0
+      debug: false
+      process_results: false
+      patterns: 
+        - pattern_string: 'test'
+      command_test_ids: [0]
+  stop_when_triggered: false
+collect:
+  process_result: true
+tests:
+  - command: 'show cef drop'
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+      occurrence:
+      number_of_occurrences:
+      fields:
+      - field_number: 1
+        operation: "field operation 1"
+        value: "1"
+      - field_number: 2
+        operation: "field operation 2"
+        value: "2"
+      separator:
+      if_triggered_commands:
+      - command: 'test if triggered command'            
+        command_timeout: 2
+        times: 1
+        interval: 1
+        wait_before: 1
+        wait_after: 1
+        location:
+        - 0/0/CPU0
+        debug: false
+        process_results: false
+        patterns: 
+          - pattern_string: 'test'
+        command_test_ids: [0]
+      check_all_results: false
+commands:
+  - command: 'show cef drop'
+    patterns:
+    - patter_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    command_test_ids: [1]
+    command_timeout: 2
+    times: 1
+    interval: 1
+    wait_before: 1
+    wait_after: 1
+    location:
+     - 0/0/CPU0
+    debug: false
+    process_results: false
