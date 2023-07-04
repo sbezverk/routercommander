@@ -71,6 +71,6 @@ type Pattern struct {
 }
 
 type CommandResult struct {
-	PatternMatch  map[string][]string
+	PatternMatch  []string
 	TriggeredTest []int
 }

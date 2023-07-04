@@ -72,10 +72,12 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 		glog.Infof("router %s: iteration - %d/%d completed,", r.GetName(), it+1, iterations)
 		types.Delay(interval)
 	}
-	if triggered {
-		glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
-	} else {
-		glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
+	if commander.Repro != nil {
+		if triggered {
+			glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
+		} else {
+			glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
+		}
 	}
 }
 
@@ -110,11 +112,9 @@ func processMainGroupOfCommands(r types.Router, commander *types.Commander, iter
 			}
 		}
 		if len(c.CommandResult.PatternMatch) != 0 {
-			for p, ms := range c.CommandResult.PatternMatch {
-				glog.Infof("router %s: command %q pattern: %s", r.GetName(), c.Cmd, p)
-				for _, m := range ms {
-					glog.Infof("\t%s", m)
-				}
+			glog.Infof("router %s: command %q matches:", r.GetName(), c.Cmd)
+			for _, ms := range c.CommandResult.PatternMatch {
+				glog.Infof("\t%s", ms)
 			}
 		}
 		// If no tests to do, just continue pattern matching
@@ -177,7 +177,6 @@ out:
 }
 
 func runTest(results []*types.CmdResult, t *types.Test, iteration int) (bool, error) {
-	triggered := false
 	if len(results) == 0 {
 		return false, nil
 	}
@@ -229,13 +228,12 @@ func runTest(results []*types.CmdResult, t *types.Test, iteration int) (bool, er
 			nm = t.Occurrence
 			indx = t.Occurrence - 1
 		}
-		perMatchTrigger := 0
+		perOccurenceTrigger := 0
 		for ; indx < nm; indx++ {
-			// When test has one or more fields and all fields' checks should produce a tru condition, check_all_results is set to True
+			// When test has one or more fields and all fields' checks should produce a true condition, check_all_results is set to True
 			// number variable is used to calculate a number of "true" condirtions
 			perFieldTrigger := 0
 			for _, field := range t.Fields {
-				triggered = false
 				vm, err := getValue(re.Result, matches[indx], field, t.Separator)
 				if err != nil {
 					return false, fmt.Errorf("failed to extract value field id %d for command %q test id %d with error: %+v", field.FieldNumber, re.Cmd, t.ID, err)
@@ -256,23 +254,28 @@ func runTest(results []*types.CmdResult, t *types.Test, iteration int) (bool, er
 			if t.CheckAllResults {
 				// Need to check all fields, only then the match[indx] considered as a trigger
 				if perFieldTrigger == len(t.Fields) {
-					return true, nil
+					perOccurenceTrigger++
 				}
 			} else {
-				perMatchTrigger++
+				// Not all checks are required, a single field trigger is sufficient
+				if perFieldTrigger > 0 {
+					perOccurenceTrigger++
+				}
 			}
 		}
 		if t.CheckAllResults {
 			// Need to check all matches, only then the test considered as the trigger
-			if perMatchTrigger == len(matches) {
+			if perOccurenceTrigger == len(matches) {
 				return true, nil
 			}
 		} else {
-			perMatchTrigger++
+			if perOccurenceTrigger > 0 {
+				return true, nil
+			}
 		}
 	}
 
-	return triggered, nil
+	return false, nil
 }
 
 func processCommandsIfTriggered(r types.Router, commands []*types.Command) error {
@@ -285,8 +288,8 @@ func processCommandsIfTriggered(r types.Router, commands []*types.Command) error
 	return nil
 }
 
-func matchPatterns(results []*types.CmdResult, patterns []*types.Pattern) (map[string][]string, error) {
-	matches := make(map[string][]string)
+func matchPatterns(results []*types.CmdResult, patterns []*types.Pattern) ([]string, error) {
+	matches := make([]string, 0)
 	for _, re := range results {
 		reader := bufio.NewReader(bytes.NewReader(re.Result))
 		done := false
@@ -298,16 +301,9 @@ func matchPatterns(results []*types.CmdResult, patterns []*types.Pattern) (map[s
 				}
 				done = true
 			}
-			var m []string
-			var ok bool
 			for _, p := range patterns {
 				if i := p.RegExp.FindIndex(b); i != nil {
-					m, ok = matches[p.PatternString]
-					if !ok {
-						m = make([]string, 0)
-					}
-					m = append(m, strings.Trim(string(b), "\n\r\t"))
-					matches[p.PatternString] = m
+					matches = append(matches, strings.Trim(string(b), "\n\r\t"))
 				}
 			}
 		}
@@ -397,5 +393,5 @@ func getValue(b []byte, index []int, field *types.Field, separator string) (stri
 		return "", fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, separator, field.FieldNumber)
 	}
 
-	return strings.Trim(parts[field.FieldNumber-1], " \n\t,"), nil
+	return strings.Trim(parts[field.FieldNumber], " \n\t,"), nil
 }

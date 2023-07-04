@@ -6,7 +6,7 @@ tests:
     command_tests:
     - id: 1
       pattern:
-        pattern_string: '0/FC[0-4]/[0-4]'
+        pattern_string: '0/FC[0-9]/[0-9]'
       field_separator: "|"
       fields:
         - field_number: 2
@@ -18,6 +18,29 @@ tests:
         - field_number: 6
           operation: "compare_with_value_neq"
           value: "NRML"
+  - command: "show watchdog memory-state location all"
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: 'Memory\s+State\s+:'
+      field_separator: ":"
+      fields:
+        - field_number: 2
+          operation: "compare_with_value_neq"
+          value: "Normal"
+  - command: "admin show controller fabric plane all"
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: '[0-5]\s{4}\w'
+      field_separator: " "
+      fields:
+        - field_number: 2
+          operation: "compare_with_value_neq"
+          value: "UP"
+        - field_number: 3
+          operation: "compare_with_value_neq"
+          value: "UP"
 collect:
   process_result: true
 commands:
@@ -51,7 +74,6 @@ commands:
       - pattern_string: 'HW_PROG_ERROR'
       - pattern_string: 'ASIC'
       - pattern_string: 'FAB'
-      - pattern_string: 'PEER_DUP_ADDRS'
   - command: admin show controller fabric plane all
     patterns:
     - pattern_string: '.+?(DN)'
@@ -61,3 +83,10 @@ commands:
   - command: show cef drops
     patterns:
     - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+  - command: "show watchdog memory-state location all"
+    patterns:
+    - pattern_string: 'CPU0'
+    command_test_id: 1
+  - command: "admin show controller fabric plane all"
+    patterns:
+    command_test_id: 1

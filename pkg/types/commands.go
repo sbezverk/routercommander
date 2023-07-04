@@ -51,7 +51,7 @@ func parseCommandFile(b []byte) (*Commander, error) {
 			}
 		}
 		cmd.CommandResult = &CommandResult{
-			PatternMatch:  make(map[string][]string),
+			PatternMatch:  make([]string, 0),
 			TriggeredTest: make([]int, 0),
 		}
 	}
