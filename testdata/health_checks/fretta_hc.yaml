@@ -1,6 +1,3 @@
-repro:
-  times: 1
-  stop_when_triggered: false
 tests:
   - command: "admin show controller sfe driver location all"
     command_tests:
