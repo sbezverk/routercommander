@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"regexp"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/messenger"
@@ -22,7 +26,7 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 		}
 		stopWhenTriggered = commander.Repro.StopWhenTriggered
 	}
-	glog.Infof("router %s: mode \"repro\", the command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
+	glog.Infof("router %s: command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
 	// Setting up the notification to be sent at the end of execution
 	defer func() {
 		if n != nil {
@@ -105,6 +109,14 @@ func processMainGroupOfCommands(r types.Router, commander *types.Commander, iter
 				c.CommandResult.PatternMatch = matches
 			}
 		}
+		if len(c.CommandResult.PatternMatch) != 0 {
+			for p, ms := range c.CommandResult.PatternMatch {
+				glog.Infof("router %s: command %q pattern: %s", r.GetName(), c.Cmd, p)
+				for _, m := range ms {
+					glog.Infof("\t%s", m)
+				}
+			}
+		}
 		// If no tests to do, just continue pattern matching
 		if commander.Tests == nil {
 			continue
@@ -121,14 +133,6 @@ func processMainGroupOfCommands(r types.Router, commander *types.Commander, iter
 		c.CommandResult.TriggeredTest = triggers
 		if len(triggers) > 0 {
 			triggered = true
-		}
-		if len(c.CommandResult.PatternMatch) != 0 {
-			for p, ms := range c.CommandResult.PatternMatch {
-				glog.Infof("router %s: command %q pattern: %s", r.GetName(), c.Cmd, p)
-				for _, m := range ms {
-					glog.Infof("\t%s", m)
-				}
-			}
 		}
 		if len(c.CommandResult.TriggeredTest) != 0 {
 			glog.Infof("router %s: command %q triggered test ids: %v", r.GetName(), c.Cmd, c.CommandResult.TriggeredTest)
@@ -279,4 +283,119 @@ func processCommandsIfTriggered(r types.Router, commands []*types.Command) error
 		}
 	}
 	return nil
+}
+
+func matchPatterns(results []*types.CmdResult, patterns []*types.Pattern) (map[string][]string, error) {
+	matches := make(map[string][]string)
+	for _, re := range results {
+		reader := bufio.NewReader(bytes.NewReader(re.Result))
+		done := false
+		for !done {
+			b, err := reader.ReadBytes('\n')
+			if err != nil {
+				if err != io.EOF {
+					return nil, fmt.Errorf("failed to read command: %q result buffer with error: %v", re.Cmd, err)
+				}
+				done = true
+			}
+			var m []string
+			var ok bool
+			for _, p := range patterns {
+				if i := p.RegExp.FindIndex(b); i != nil {
+					m, ok = matches[p.PatternString]
+					if !ok {
+						m = make([]string, 0)
+					}
+					m = append(m, strings.Trim(string(b), "\n\r\t"))
+					matches[p.PatternString] = m
+				}
+			}
+		}
+	}
+
+	return matches, nil
+}
+
+func check(op string, iteration int, field *types.Field, store map[int]map[int]interface{}) (bool, error) {
+	switch op {
+	case "compare_with_previous_neq":
+		if iteration == 0 {
+			return false, nil
+		}
+		glog.Infof("Previous value: %s current value: %s", store[iteration-1][field.FieldNumber], store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != store[iteration-1][field.FieldNumber] {
+			return true, nil
+		}
+	case "compare_with_previous_eq":
+		if iteration == 0 {
+			return false, nil
+		}
+		glog.Infof("Previous value: %s current value: %s", store[iteration-1][field.FieldNumber], store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != store[iteration-1][field.FieldNumber] {
+			return true, nil
+		}
+	case "compare_with_value_neq":
+		glog.Infof("Expected value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != field.Value {
+			return true, nil
+		}
+	case "compare_with_value_eq":
+		glog.Infof("Expected value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] == field.Value {
+			return true, nil
+		}
+	case "contain_substring":
+		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if !strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+			return true, nil
+		}
+	case "not_contain_substring":
+		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("unknown operation: %s for field number: %d",
+			field.Operation, field.FieldNumber)
+	}
+
+	return false, nil
+}
+
+func getValue(b []byte, index []int, field *types.Field, separator string) (string, error) {
+	if separator == "" {
+		separator = " "
+	}
+	endLine, err := regexp.Compile(`(?m)$`)
+	if err != nil {
+		return "", err
+	}
+	startLine, err := regexp.Compile(`(?m)^`)
+	if err != nil {
+		return "", err
+	}
+	// First, find the end of the line with matching pattern
+	eIndex := endLine.FindIndex(b[index[0]:])
+	if eIndex == nil {
+		return "", fmt.Errorf("failed to find the end of line in data: %s", string(b[index[0]:]))
+	}
+	en := index[0] + eIndex[0]
+	// Second, find the start of the string with matching pattern
+	sIndex := startLine.FindAllIndex(b[:en-1], -1)
+	if sIndex == nil {
+		return "", fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
+	}
+	st := sIndex[len(sIndex)-1][0]
+	s := string(b[st:en])
+	// Splitting the resulting string using provided separator
+	sepreg, err := regexp.Compile("[" + separator + "]+")
+	if err != nil {
+		return "", err
+	}
+	parts := sepreg.Split(s, -1)
+	if len(parts) < field.FieldNumber-1 {
+		return "", fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, separator, field.FieldNumber)
+	}
+
+	return strings.Trim(parts[field.FieldNumber-1], " \n\t,"), nil
 }

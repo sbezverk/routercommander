@@ -138,9 +138,9 @@ func (l logger) worker() {
 	}
 }
 
-func NewLogger(prefix string) (Logger, error) {
+func NewLogger(prefix string, logLoc string) (Logger, error) {
 	ts := strings.Replace(time.Now().Format("2006-01-02_15:04:05"), " ", "_", -1)
-	fileName := "./logs/" + prefix + "_" + ts + ".log"
+	fileName := logLoc + prefix + "_" + ts + ".log"
 	f, err := os.Create(fileName)
 	if err != nil {
 

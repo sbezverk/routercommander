@@ -20,7 +20,7 @@ tests:
           value: "NRML"
 collect:
   process_result: true
-main_command_group:
+commands:
   - command: show bundle brief
     patterns:
       - pattern_string: '[D|d][O|o][W|w][N|n]'
@@ -53,9 +53,11 @@ main_command_group:
       - pattern_string: 'FAB'
       - pattern_string: 'PEER_DUP_ADDRS'
   - command: admin show controller fabric plane all
-    pattern:
-      - `.+?(DN)`
+    patterns:
+    - pattern_string: '.+?(DN)'
   - command: admin show controller sfe driver location all
     process_result: true
     command_test_id: 1
-
+  - command: show cef drops
+    patterns:
+    - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
