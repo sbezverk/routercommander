@@ -82,7 +82,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.3.0           |
+    | routercommander                  v0.4.0           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -183,11 +183,7 @@ func main() {
 		ci := &types.Commander{}
 		*ci = *commands
 		wg.Add(1)
-		if ci.Repro != nil {
-			go repro(r, ci, n)
-		} else {
-			go collect(r, ci, n)
-		}
+		go process(r, ci, n)
 	}
 	wg.Wait()
 }

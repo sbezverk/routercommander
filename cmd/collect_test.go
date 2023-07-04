@@ -15,7 +15,7 @@ func TestCheckCommandOutput(t *testing.T) {
 		name     string
 		input    []*types.CmdResult
 		patterns []*types.Pattern
-		matches  []string
+		matches  map[string][]string
 	}{
 		{
 			name: "admin show controller fabric plane all",
@@ -38,27 +38,30 @@ Id    State State    counter   counter
 			},
 			patterns: []*types.Pattern{
 				{
-					RegExp: regexp.MustCompile(`.+?(DN)`),
+					PatternString: "`.+?(DN)",
+					RegExp:        regexp.MustCompile(`.+?(DN)`),
 				},
 			},
-			matches: []string{
-				`1     DN    UP             4        11`,
-				`2     UP    DN             5        14`,
-				`5     DN    DN             4         4`,
+			matches: map[string][]string{
+				"`.+?(DN)": {`1     DN    UP             4        11`,
+					`2     UP    DN             5        14`,
+					`5     DN    DN             4         4`,
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := checkCommandOutput(tt.input, tt.patterns)
+			matches, err := matchPatterns(tt.input, tt.patterns)
 			if err != nil {
 				t.Fatalf("failed with error: %+v", err)
 			}
 			if len(matches) != len(tt.matches) {
 				t.Fatalf("number of expected matches: %d does not match the computed: %d", len(tt.matches), len(matches))
 			}
-			s1 := sort.SortMergeComparableSlice(matches)
-			s2 := sort.SortMergeComparableSlice(tt.matches)
+
+			s1 := sort.SortMergeComparableSlice(matches[tt.patterns[0].PatternString])
+			s2 := sort.SortMergeComparableSlice(tt.matches[tt.patterns[0].PatternString])
 			for i := 0; i < len(tt.matches); i++ {
 				if strings.Trim(s1[i], " \n\t") != strings.Trim(s2[i], " \n\t") {
 					t.Logf("element %d diffs for  %+v", i, deep.Equal(s1[i], s2[i]))
