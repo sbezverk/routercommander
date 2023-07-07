@@ -118,3 +118,6 @@ commands:
   - command: "show asic-errors fia all all location all"
     patterns:
     - pattern_string: 'Tcam_Protection_Err'
+  - command: "show redundancy"
+    patterns:
+    - pattern_string: "is not ready"
