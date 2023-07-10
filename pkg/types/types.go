@@ -10,6 +10,7 @@ type Command struct {
 	WaitBefore    int        `yaml:"wait_before"`
 	WaitAfter     int        `yaml:"wait_after"`
 	Location      []string   `yaml:"location"`
+	PipeModifier  string     `yaml:"pipe_modifier"`
 	Debug         bool       `yaml:"debug"`
 	ProcessResult bool       `yaml:"process_result"`
 	Patterns      []*Pattern `yaml:"patterns"`

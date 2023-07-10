@@ -59,12 +59,16 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 		Delay(cmd.WaitBefore)
 	}
 	commandTimeout := DefaultCommandTimeout
-	if cmd.CmdTimeout != 0 {
+	if cmd.CmdTimeout != 0 && cmd.CmdTimeout > DefaultCommandTimeout {
 		commandTimeout = cmd.CmdTimeout
+	}
+	pipeModifier := ""
+	if cmd.PipeModifier != "" {
+		pipeModifier += " | " + cmd.PipeModifier
 	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+		rs, err := r.sendCommand(c+" "+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +77,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 		}
 	} else {
 		for _, l := range cmd.Location {
-			fc := c + " " + "location " + l
+			fc := c + " " + "location " + l + " " + pipeModifier
 			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 			if err != nil {
 				return nil, err
@@ -93,9 +97,9 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 func (r *router) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
-			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
+			glog.Infof("Sending command: %q to router: %q, command timeout: %d seconds", cmd, r.GetName(), commandTimeout)
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, r.GetName())
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q, command timeout: %d seconds", cmd, times, interval, r.GetName(), commandTimeout)
 		}
 	}
 	if interval == 0 || times == 0 {
@@ -213,12 +217,12 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
 	startPartial := commandParts[0]
-	// if len(commandParts) > 1 {
-	// 	startPartial += `\s+` + commandParts[1] + `\s*`
-	// }
 	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
+	if commandTimeout == 0 {
+		commandTimeout = 120
+	}
 	timeout := time.NewTimer(time.Second * time.Duration(commandTimeout))
 	defer func() {
 		close(errCh)
