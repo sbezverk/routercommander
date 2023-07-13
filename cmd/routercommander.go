@@ -52,7 +52,7 @@ func init() {
 	flag.StringVar(&smtpPass, "smtp-pass", "", "a password to use to authenticate to the smtp server")
 	flag.StringVar(&smtpFrom, "smtp-from", "", "email address to use for sending the report from")
 	flag.StringVar(&smtpTo, "smtp-to", "", "comma separated list of emails for sending the report to")
-	flag.StringVar(&logLoc, "log", "./logs/", "path for the log file.")
+	flag.StringVar(&logLoc, "log", "", "path for the log file.")
 }
 
 func getInfoFromFile(fn string) ([]string, error) {
