@@ -25,39 +25,7 @@ commands:
     location:
     - all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show ipv4 trace
-    location:
-    - all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show adjacency trace all
-    location:
-    - all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show mpls io trace
-    location:
-    - all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show grid trace all wrapping
-    command_timeout: 600
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show ppinfo producer trace all location all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show ppinfo consumer trace all location all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show adjacency platform trace
-    location:
-    - 0/RP0/CPU0 
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show grid trace all
-    command_timeout: 600
-    location:
-    - all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show cef platform trace all all
-    location:
-    - all
-    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show cef trace wrapping
+  - command: show cef trace frr
     command_timeout: 600
     location:
     - all
@@ -67,10 +35,32 @@ commands:
     location:
     - all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show cef trace wrapping
+    command_timeout: 600
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show cef platform trace all all
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show adjacency trace all
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show adjacency platform trace
     location:
     - all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls io trace
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+#  - command: show grid trace all
+#    command_timeout: 600
+#    location:
+#    - all
+#    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls traffic-eng trace error usec
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls traffic-eng trace destroy usec
@@ -88,6 +78,18 @@ commands:
   - command: show mpls lsd trace location all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command:  show rib ipv4 trace
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command:  show rib trace nhid
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show ppinfo producer trace all location all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show ppinfo consumer trace all location all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show ipv4 trace
     location:
     - all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
