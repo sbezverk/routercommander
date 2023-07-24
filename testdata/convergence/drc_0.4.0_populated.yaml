@@ -1,0 +1,20 @@
+#
+# Replace below variables, !!! do NOT use the original file!!!
+# always save changes to a different file. 
+#
+# 10.188.162.200/32 is loopback of the remote DRC (showld be specified in a form of A.A.A.A/32)
+# 10.101.3.1/30 is destination ip for failed mesh ping session (showld be specified in a form of B.B.B.B/N, where N remote prefix length3
+# GI   is vrf for the impacted flow
+# 0/0/CPU0 is a line card hosting the source of mesh ping traffic
+# 0/0/CPU0 is a line card facing upstream ORC routers
+# Jul( )+14( )+(13|14): is a time stamp when the incident occurred, with 1 hour precision, example: Jul 10 0[8-9]
+#
+collect:
+  process_result: true
+commands:
+  - command: show cef trace
+    command_timeout: 600
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"Jul( )+14( )+(13|14):\""
+
