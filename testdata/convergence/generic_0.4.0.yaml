@@ -16,10 +16,16 @@ commands:
   - command: show route {{.REMOTE_LOOPBACK}} det
   - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
   - command: show cef {{.REMOTE_LOOPBACK}} detail
-  - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} hardware egress detail location {{.INGRESS_LC}}
-  - command: show cef {{.REMOTE_LOOPBACK}} hardware egress detail location {{.EGRESS_LC}}
+  - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} hardware egress detail
+    location:
+    - all-lc
+  - command: show cef {{.REMOTE_LOOPBACK}} hardware egress detail
+    location:
+    - all-lc
   - command: show mpls forwarding prefix {{.REMOTE_LOOPBACK}} det
-  - command: show mpls forwarding prefix {{.REMOTE_LOOPBACK}} hardware egress detail location {{.EGRESS_LC}}
+  - command: show mpls forwarding prefix {{.REMOTE_LOOPBACK}} hardware egress detail
+    location:
+    - all-lc
   - command: show cef trace
     command_timeout: 600
     location:
@@ -82,20 +88,24 @@ commands:
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command:  show rib ipv4 trace
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command:  show ospf trace all
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command:  show rib trace nhid
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show ppinfo producer trace all location all
+  - command: show ppinfo producer trace all
+    location:
+    - all-lc
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: show ppinfo consumer trace all location all
+  - command: show ppinfo consumer trace all
+    location:
+    - all-lc
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show ipv4 trace
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
 

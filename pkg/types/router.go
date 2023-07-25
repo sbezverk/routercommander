@@ -182,14 +182,14 @@ func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipe
 				return nil, err
 			}
 			results = append(results, rs...)
-		case "allrps":
+		case "all-rp":
 			locs = append(locs, r.GetAllRPs()...)
 			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
 			results = append(results, rs...)
-		case "allcls":
+		case "all-lc":
 			locs = append(locs, r.GetAllLCs()...)
 			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
 			if err != nil {
