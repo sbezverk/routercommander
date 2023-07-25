@@ -124,6 +124,26 @@ func (l *localRouter) GetData(cmd string, debug bool, commandTimeout int) ([]byt
 	return c.Output()
 }
 
+func (l *localRouter) IsExistingLocation(loc string) bool {
+	return false
+}
+
+func (l *localRouter) GetAllLCs() []string {
+	return nil
+}
+
+func (l *localRouter) GetAllRPs() []string {
+	return nil
+}
+
+func (l *localRouter) GetAllLocations() []string {
+	return nil
+}
+
+func (l *localRouter) GetActiveRP() string {
+	return ""
+}
+
 func NewLocalRouter(router string, li log.Logger) Router {
 	return &localRouter{
 		name:   router,

@@ -23,11 +23,90 @@ const (
 )
 
 type Router interface {
+	IsExistingLocation(string) bool
+	GetAllLCs() []string
+	GetAllRPs() []string
+	GetActiveRP() string
+	GetAllLocations() []string
 	GetName() string
 	GetData(string, bool, int) ([]byte, error)
 	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
 	GetLogger() log.Logger
+}
+
+func (r *router) IsExistingLocation(l string) bool {
+	if _, found := r.platform.rps.rps[l]; found {
+		return true
+	}
+	if _, found := r.platform.lcs.lcs[l]; found {
+		return true
+	}
+
+	return false
+}
+
+func (r *router) GetAllLCs() []string {
+	if r.platform.lcs == nil {
+		return nil
+	}
+	if len(r.platform.lcs.lcs) == 0 {
+		return nil
+	}
+	lcs := make([]string, len(r.platform.lcs.lcs))
+	i := 0
+	for lc := range r.platform.lcs.lcs {
+		lcs[i] = lc
+		i++
+	}
+
+	return lcs
+}
+
+func (r *router) GetAllRPs() []string {
+	if r.platform.rps == nil {
+		return nil
+	}
+	if len(r.platform.rps.rps) == 0 {
+		return nil
+	}
+	rps := make([]string, len(r.platform.rps.rps))
+	i := 0
+	for rp := range r.platform.rps.rps {
+		rps[i] = rp
+		i++
+	}
+
+	return rps
+}
+
+func (r *router) GetAllLocations() []string {
+	locations := make([]string, 0)
+	rps := r.GetAllRPs()
+	if rps != nil {
+		locations = append(locations, rps...)
+	}
+	lcs := r.GetAllLCs()
+	if lcs != nil {
+		locations = append(locations, lcs...)
+	}
+
+	return locations
+}
+
+func (r *router) GetActiveRP() string {
+	if r.platform.rps == nil {
+		return ""
+	}
+	if len(r.platform.rps.rps) == 0 {
+		return ""
+	}
+	for loc, rp := range r.platform.rps.rps {
+		if rp.isActive {
+			return loc
+		}
+	}
+	return ""
 }
 
 func (r *router) GetName() string {
@@ -76,19 +155,55 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			results = append(results, rs...)
 		}
 	} else {
-		for _, l := range cmd.Location {
-			fc := c + " " + "location " + l + " " + pipeModifier
-			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
-			if err != nil {
-				return nil, err
-			}
-			if collectResult {
-				results = append(results, rs...)
-			}
+		rs, err := r.sendCommandWithLocations(cmd, cmd.Location, pipeModifier, commandTimeout)
+		if err != nil {
+			return nil, err
+		}
+		if collectResult {
+			results = append(results, rs...)
 		}
 	}
 	if cmd.WaitAfter != 0 {
 		Delay(cmd.WaitAfter)
+	}
+
+	return results, nil
+}
+
+func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipeModifier string, commandTimeout int) ([]*CmdResult, error) {
+	results := make([]*CmdResult, 0)
+	locs := make([]string, 0)
+	for _, l := range locations {
+		switch l {
+		case "all":
+			locs = append(locs, r.GetAllLocations()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		case "allrps":
+			locs = append(locs, r.GetAllRPs()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		case "allcls":
+			locs = append(locs, r.GetAllLCs()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		default:
+			fc := cmd.Cmd + " " + "location " + l + " " + pipeModifier
+			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		}
 	}
 
 	return results, nil
@@ -143,6 +258,7 @@ type router struct {
 	session   *ssh.Session
 	sshClient *ssh.Client
 	logger    log.Logger
+	platform  *platform
 }
 
 func (r *router) Close() {
@@ -207,7 +323,16 @@ func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (
 	if _, err := r.GetData("terminal l 0", false, DefaultCommandTimeout); err != nil {
 		return nil, err
 	}
-
+	// Getting platform information
+	b, err := r.GetData("show platform", false, DefaultCommandTimeout)
+	if err != nil {
+		return nil, err
+	}
+	p, err := populatePlatformInfo(b)
+	if err != nil {
+		return nil, err
+	}
+	r.platform = p
 	return r, nil
 }
 
