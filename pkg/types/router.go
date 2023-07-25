@@ -48,10 +48,10 @@ func (r *router) IsExistingLocation(l string) bool {
 
 func (r *router) GetAllLCs() []string {
 	if r.platform.lcs == nil {
-		return nil
+		return r.GetAllRPs()
 	}
 	if len(r.platform.lcs.lcs) == 0 {
-		return nil
+		return r.GetAllRPs()
 	}
 	lcs := make([]string, len(r.platform.lcs.lcs))
 	i := 0

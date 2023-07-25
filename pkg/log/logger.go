@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 type Logger interface {
@@ -145,13 +147,15 @@ func NewLogger(prefix string, logLoc string) (Logger, error) {
 	if logLoc == "" {
 		logLoc = "." + string(os.PathSeparator)
 	}
+	if logLoc[len(logLoc)-1] != os.PathSeparator {
+		logLoc += string(os.PathSeparator)
+	}
 	fileName := filepath.Join(logLoc + prefix + "_" + ts + ".log")
 	f, err := os.Create(fileName)
 	if err != nil {
-
 		return nil, err
 	}
-
+	glog.Infof("log for router: %s has been created at %s location", prefix, fileName)
 	l := &logger{
 		f:     f,
 		input: make(chan *data),
