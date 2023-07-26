@@ -14,8 +14,10 @@ collect:
 commands:
   - command: show route vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
   - command: show route {{.REMOTE_LOOPBACK}} det
+  - command: show route {{.LOCAL_LOOPBACK}} det
   - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
   - command: show cef {{.REMOTE_LOOPBACK}} detail
+  - command: show cef {{.LOCAL_LOOPBACK}} detail
   - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} hardware egress detail
     location:
     - all-lc
