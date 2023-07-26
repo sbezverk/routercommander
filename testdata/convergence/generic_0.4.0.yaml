@@ -54,6 +54,7 @@ commands:
     - all-lc
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show cef platform trace all all
+    command_timeout: 600
     location:
     - all-lc
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""

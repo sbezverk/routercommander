@@ -17,10 +17,33 @@ TIME_STAMP="Jul\( \)+14\( \)+\(13\|14\):"
 
 cp ./generic_0.4.0.yaml ./generic_0.4.0_populated.yaml
 
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+sed -i  "s|{{.REMOTE_LOOPBACK}}|${REMOTE_LOOPBACK}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.LOCAL_LOOPBACK}}|${LOCAL_LOOPBACK}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.REMOTE_DESTINATION}}|${REMOTE_DESTINATION}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.VRF_NAME}}|${VRF_NAME}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.INGRESS_LC}}|${INGRESS_LC}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.EGRESS_LC}}|${EGRESS_LC}|g" ./generic_0.4.0_populated.yaml
+sed -i  "s|{{.TIME_STAMP}}|${TIME_STAMP}|g" ./generic_0.4.0_populated.yaml
+
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+        # Mac OSX
 sed -i '' "s|{{.REMOTE_LOOPBACK}}|${REMOTE_LOOPBACK}|g" ./generic_0.4.0_populated.yaml
-sed -i '' "s|{{.LOCAL_LOOPBACK}}|${LOCAL_LOOPBACK}|g" ./generic_0.4.0_populated.yaml
 sed -i '' "s|{{.REMOTE_DESTINATION}}|${REMOTE_DESTINATION}|g" ./generic_0.4.0_populated.yaml
 sed -i '' "s|{{.VRF_NAME}}|${VRF_NAME}|g" ./generic_0.4.0_populated.yaml
 sed -i '' "s|{{.INGRESS_LC}}|${INGRESS_LC}|g" ./generic_0.4.0_populated.yaml
 sed -i '' "s|{{.EGRESS_LC}}|${EGRESS_LC}|g" ./generic_0.4.0_populated.yaml
 sed -i '' "s|{{.TIME_STAMP}}|${TIME_STAMP}|g" ./generic_0.4.0_populated.yaml
+
+# elif [[ "$OSTYPE" == "cygwin" ]]; then
+        # POSIX compatibility layer and Linux environment emulation for Windows
+# elif [[ "$OSTYPE" == "msys" ]]; then
+        # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
+# elif [[ "$OSTYPE" == "win32" ]]; then
+        # I'm not sure this can happen.
+# elif [[ "$OSTYPE" == "freebsd"* ]]; then
+        # ...
+# else
+        # Unknown.
+fi 
