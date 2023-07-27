@@ -64,7 +64,7 @@ commands:
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show adjacency platform trace
     location:
-    - all
+    - all-lc
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls io trace
     location:
@@ -72,11 +72,11 @@ commands:
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls ldp trace
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls lsd trace
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls traffic-eng trace error usec
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
@@ -88,11 +88,11 @@ commands:
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show mpls traffic-eng trace topology usec
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
-  - command: sh mpls lib traffic-eng notification trace
+  - command: sh mpls traffic-eng trace fsm
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: show rsvp api client te trace events
     location:
-    - all
+    - all-rp
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command:  show rib ipv4 trace
     location:
@@ -115,5 +115,11 @@ commands:
   - command: show ipv4 trace
     location:
     - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show im database brief view local-data-plane
+    location:
+    - all 
+  - command: show bundle
+  - command: show logging
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
 
