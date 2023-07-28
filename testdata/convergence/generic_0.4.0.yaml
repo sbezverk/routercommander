@@ -10,7 +10,7 @@
 # {{.TIME_STAMP}} is a time stamp when the incident occurred, with 1 hour precision, example: Jul 10 0[8-9]
 #
 collect:
-  process_result: true
+  process_result: false
 commands:
   - command: show route vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
   - command: show route {{.REMOTE_LOOPBACK}} det
@@ -90,6 +90,7 @@ commands:
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
   - command: sh mpls traffic-eng trace fsm
     pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls traffic-eng fast-reroute database
   - command: show rsvp api client te trace events
     location:
     - all-rp
