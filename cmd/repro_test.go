@@ -10,7 +10,8 @@ func TestGetValue(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      []byte
-		capture    *types.Capture
+		field      *types.Field
+		separator  string
 		index      []int
 		fieldValue string
 		found      bool
@@ -28,10 +29,8 @@ udp        0      0 0.0.0.0:68              0.0.0.0:*                           
 udp        0      0 0.0.0.0:33433           0.0.0.0:*                           6597/igmp
 udp6       0      0 :::33433                :::*                                6586/mld
 		`),
-			capture: &types.Capture{
-				FieldNumber: []int{4},
-				Separator:   " ",
-				Occurrence:  1,
+			field: &types.Field{
+				FieldNumber: 4,
 			},
 			index: []int{292, 297},
 		},
@@ -45,10 +44,8 @@ udp        0      0 0.0.0.0:68              0.0.0.0:*                           
 udp        0      0 0.0.0.0:33433           0.0.0.0:*                           6597/igmp
 udp6       0      0 :::33433                :::*                                6586/mld
 `),
-			capture: &types.Capture{
-				FieldNumber: []int{4},
-				Separator:   " ",
-				Occurrence:  1,
+			field: &types.Field{
+				FieldNumber: 4,
 			},
 			index: []int{119, 124},
 		},
@@ -61,17 +58,15 @@ udp        0      0 0.0.0.0:68              0.0.0.0:*                           
 udp        0      0 0.0.0.0:33433           0.0.0.0:*                           6597/igmp       
 udp6       0      0 :::33433                :::*                                6586/mld        
 `),
-			capture: &types.Capture{
-				FieldNumber: []int{4},
-				Separator:   " ",
-				Occurrence:  1,
+			field: &types.Field{
+				FieldNumber: 4,
 			},
 			index: []int{28, 33},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := getValue(tt.input, tt.index, tt.capture)
+			r, err := getValue(tt.input, tt.index, tt.field, tt.separator)
 			if err != nil {
 				t.Fatalf("failed with error: %+v", err)
 			}

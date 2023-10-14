@@ -1,14 +1,20 @@
 repro:
-  times: 604800
+  times: 6
   interval: 1
-  postmortem_commands:
+  command_processing_rules:
+    - command: "run netstat -s -udp"
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'SndbufErrors:\s*[0-9+]'
+          field_separator: ":"
+          fields:
+            - field_number: 2
+              operation: "compare_with_previous_neq"
+                    # Command to execute if condition is met
+  postmortem_command_group:
     - command: 'run for i in {1..200}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
-commands:
+main_command_group:
   - command: "run netstat -s -udp"
     process_result: true
-    patterns:
-      - pattern_string: 'SndbufErrors:\s*[0-9+]'
-        capture:
-          field_number: 2
-          separator: ":"
-    debug: false
+    command_test_id: 1

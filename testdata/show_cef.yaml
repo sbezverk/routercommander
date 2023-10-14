@@ -1,5 +1,8 @@
-commands:
+collect:
+  health_check: true
+main_command_group:
   - command: show cef drops
+    command_timeout: 30
     times: 1
     interval: 1
     location:
@@ -9,3 +12,5 @@ commands:
     patterns:
       - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
     debug: false
+  - command: show tech cef
+    command_timeout: 300

@@ -74,145 +74,239 @@ func repro(r types.Router, commands *types.Commander, n messenger.Notifier) {
 }
 
 func processReproGroupOfCommands(r types.Router, commands []*types.Command, iteration int, repro *types.Repro) (bool, error) {
+	var test *types.CommandTest
+	triggered := false
 	for _, c := range commands {
 		results, err := r.ProcessCommand(c, true)
 		if err != nil {
 			glog.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 			return false, fmt.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 		}
-		for _, re := range results {
-			for _, p := range c.Patterns {
-				if i := p.RegExp.FindAllIndex(re.Result, -1); i != nil {
-					// There are two possibilities to react, matching against a pattern and get out if the match is found,
-					// OR if capture struct exists, to capture requested fields and follow Captured Values processing logic.
-					if p.Capture == nil {
-						// First case, when only matching is required
-						glog.Errorf("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[i[0][0]:i[0][1]]), "\n\r\t"), re.Cmd)
-						return true, nil
-					}
-					// Capture is mot nil, continue processing
-					// In case there are multiple occurrences of the same string in the output and a specific occurrence is of interest
-					indx := i[0]
-					if p.Capture.Occurrence > 0 && p.Capture.Occurrence < len(i) {
-						indx = i[p.Capture.Occurrence-1]
-					}
-					vm, err := getValue(re.Result, indx, p.Capture)
-					if err != nil {
-						return false, fmt.Errorf("failed to extract values defined by Capture tag for pattern: %s with error: %+v", p.PatternString, err)
-					}
-					// Storing extracted fields in pattern's Values per iterations map.
-					p.ValuesStore[iteration] = vm
-
-					if len(repro.CapturedValuesProcessing) == 0 {
-						glog.Infof("Captured Values Processing is empty")
-						continue
-					}
-					pc, ok := repro.CapturedValuesProcessing[c.Cmd]
-					if !ok {
-						glog.Infof("Command: %s is not found in CapturedValuesProcessing", c.Cmd)
-						continue
-					}
-					pp, ok := pc[p.PatternString]
-					if !ok {
-						glog.Infof("pattern: %s for command: %s is not found in CapturedValuesProcessing", p.PatternString, c.Cmd)
-						continue
-					}
-					triggered := false
-				out:
-					for f, v := range p.ValuesStore[iteration] {
-						glog.Infof("Current iteration: %d value: %s for field: %d", iteration+1, v, f)
-						fp, ok := pp[f]
-						if !ok {
-							glog.Infof("field: %d pattern: %s for command: %s is not found in CapturedValuesProcessing", f, p.PatternString, c.Cmd)
-							continue
-						}
-						//						glog.Infof("><SB> Captured values %s operation: %s", v, fp.Operation)
-						switch fp.Operation {
-						case "compare_with_previous_neq":
-							if iteration == 0 {
-								continue
-							}
-							//							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
-							if v != p.ValuesStore[iteration-1][f] {
-								triggered = true
-								break out
-							}
-						case "compare_with_previous_eq":
-							if iteration == 0 {
-								continue
-							}
-							//							glog.Infof("><SB> Previous value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
-							if v == p.ValuesStore[iteration-1][f] {
-								triggered = true
-								break out
-							}
-						case "compare_with_value_neq":
-							if v != fp.Value {
-								triggered = true
-								break out
-							}
-						case "compare_with_value_eq":
-							//							glog.Infof("><SB> value: %s current value: %s", p.ValuesStore[iteration-1][f], v)
-							if v == fp.Value {
-								triggered = true
-								break out
-							}
-						default:
-							return false, fmt.Errorf("unknown operation: %s for field: %d for pattern: %s", fp.Operation, fp.FieldNumber, p.PatternString)
-						}
-					}
-					if triggered {
-						if cmds, ok := repro.PerCmdPerPatternCommands[c.Cmd][p.PatternString]; ok {
-							glog.Infof("Executing pattern specific commands...")
-							if _, err := processReproGroupOfCommands(r, cmds, 0, nil); err != nil {
-								return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", p.PatternString, err)
-							}
-						}
-						return true, nil
-					}
+		if len(results) == 0 {
+			return false, fmt.Errorf("command %q prodiced no results", c.Cmd)
+		}
+		re := results[0]
+		//		glog.Infof("><SB> Command: %q", c.Cmd)
+		if repro == nil {
+			continue
+		}
+		if repro.CommandTests == nil {
+			continue
+		}
+		tests, ok := repro.CommandTests[c.Cmd]
+		if !ok {
+			// There is no test for the command, continue
+			//			glog.Warningf("><SB> No tests found for Command: %q", c.Cmd)
+			continue
+		}
+		// glog.Warningf("><SB> Tests found for Command: %q", c.Cmd)
+		test, ok = tests[c.TestID]
+		if !ok {
+			// The command specifies a non existing Test ID, continue
+			//			glog.Warningf("><SB> No test ID %d is found for Command: %q", c.TestID, c.Cmd)
+			continue
+		}
+		glog.Infof("Executing Test ID %d for Command: %q", c.TestID, c.Cmd)
+		// Test found, executing it against all instances of Result, the command can return
+		// several instances of Result, when `times` keyword is more than 1
+		if test.Pattern == nil {
+			// Pattern is nil, nothing can be done, continue
+			glog.Warningf("Pattern for command %q test id %d is nil", c.Cmd, test.ID)
+			continue
+		}
+		if test.Pattern.RegExp == nil {
+			// By some reason regular expression has not been initialized, attempting to compile it
+			p, err := regexp.Compile(test.Pattern.PatternString)
+			if err != nil {
+				glog.Warningf("Fail to compile regular experssion for command %d test id %d with error: %+v", c.Cmd, c.TestID, err)
+				continue
+			}
+			test.Pattern.RegExp = p
+		}
+		p := test.Pattern.RegExp
+		matches := p.FindAllIndex(re.Result, -1)
+		if matches == nil {
+			glog.Warningf("Test ID: %d Command: %q pattern %q is not found", c.TestID, c.Cmd, p.String())
+			continue
+		}
+		// glog.Infof("><SB> Pattern %s is found in result", p.String())
+		// Test the number of hits of the patter, if does not match, considered the issue triggered
+		if test.NumberOfOccurences != nil {
+			// glog.Infof("><SB> Number of instances test for command: %q result: %s", c.Cmd, string(re.Result))
+			if *test.NumberOfOccurences != len(matches) {
+				glog.V(5).Infof("Number of expected occurrences %d does not match with the actual number of occurrence(s) %d", *test.NumberOfOccurences, len(matches))
+				triggered = true
+				// since triggered breaking out of the loop
+				// and execute per command post-mortem commands
+				break
+			} else {
+				glog.V(5).Infof("Number of expected occurrences %d matches with the actual number of occurrence(s) %d", *test.NumberOfOccurences, len(matches))
+			}
+			continue
+		}
+		// glog.Warningf("><SB> Pattern for command %q test id %d was found %d time(s)", c.Cmd, test.ID, len(i))
+		if len(matches) <= test.Occurrence-1 {
+			// Test requesting to check specific occurrence number, but the number of found occurrences is less
+			glog.Infof("router %s: found matching line: %q, command: %q but the requested occurrence %d is more than the number of found occurrences %d",
+				r.GetName(), strings.Trim(string(re.Result[matches[0][0]:matches[0][1]]), "\n\r\t"), re.Cmd, test.Occurrence, len(matches))
+			triggered = true
+			break
+		}
+		// glog.Warningf("><SB> Pattern for command %q test id %d has %d number of field(s)", c.Cmd, test.ID, len(test.Fields))
+		if len(test.Fields) == 0 {
+			// No fields related tests, but the match was found
+			glog.Infof("router %s: found matching line: %q, command: %q", r.GetName(), strings.Trim(string(re.Result[matches[0][0]:matches[0][1]]), "\n\r\t"), re.Cmd)
+			triggered = true
+			break
+		}
+		// When multiple instances of match exists and not specific occurence number is requested, then
+		// all instances must be checked for triggerring conditions. If check_all_results is true then all checks must
+		// return "triggered"
+		nm := len(matches)
+		indx := 0
+		if test.Occurrence != 0 {
+			nm = test.Occurrence
+			indx = test.Occurrence - 1
+		}
+		perMatchTrigger := 0
+		for ; indx < nm; indx++ {
+			// When test has one or more fields and all fields' checks should produce a tru condition, check_all_results is set to True
+			// number variable is used to calculate a number of "true" condirtions
+			perFieldTrigger := 0
+			for _, field := range test.Fields {
+				triggered = false
+				vm, err := getValue(re.Result, matches[indx], field, test.Separator)
+				if err != nil {
+					return false, fmt.Errorf("failed to extract value field id %d for command %q test id %d with error: %+v", field.FieldNumber, c.Cmd, test.ID, err)
+				}
+				// Storing extracted fields in pattern's Values per iterations map.
+				if _, ok := test.ValuesStore[iteration]; !ok {
+					test.ValuesStore[iteration] = make(map[int]interface{})
+				}
+				test.ValuesStore[iteration] = map[int]interface{}{field.FieldNumber: vm}
+				trgrd, err := check(field.Operation, iteration, field, test.ValuesStore)
+				if err != nil {
+					return false, err
+				}
+				if trgrd {
+					perFieldTrigger++
+				}
+			}
+			if test.CheckAllResults {
+				// Need to check all fields, only then the match[indx] considered as a trigger
+				if perFieldTrigger == len(test.Fields) {
+					perMatchTrigger++
+				}
+			} else {
+				perMatchTrigger++
+			}
+		}
+		if test.CheckAllResults {
+			// Need to check all matches, only then the test considered as the trigger
+			if perMatchTrigger == len(matches) {
+				triggered = true
+				break
+			}
+		} else {
+			triggered = true
+			break
+		}
+	}
+	if triggered {
+		if test != nil {
+			if len(test.IfTriggeredCommands) != 0 {
+				glog.Infof("Executing test id %d specific commands...", test.ID)
+				if _, err := processReproGroupOfCommands(r, test.IfTriggeredCommands, 0, nil); err != nil {
+					return false, fmt.Errorf("failed to process pattern: %s commands with error: %+v", test.Pattern.PatternString, err)
 				}
 			}
 		}
+		return true, nil
 	}
 
 	return false, nil
 }
 
-func getValue(b []byte, index []int, capture *types.Capture) (map[int]interface{}, error) {
+func check(op string, iteration int, field *types.Field, store map[int]map[int]interface{}) (bool, error) {
+	switch op {
+	case "compare_with_previous_neq":
+		if iteration == 0 {
+			return false, nil
+		}
+		glog.Infof("Previous value: %s current value: %s", store[iteration-1][field.FieldNumber], store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != store[iteration-1][field.FieldNumber] {
+			return true, nil
+		}
+	case "compare_with_previous_eq":
+		if iteration == 0 {
+			return false, nil
+		}
+		glog.Infof("Previous value: %s current value: %s", store[iteration-1][field.FieldNumber], store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != store[iteration-1][field.FieldNumber] {
+			return true, nil
+		}
+	case "compare_with_value_neq":
+		glog.Infof("Expected value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] != field.Value {
+			return true, nil
+		}
+	case "compare_with_value_eq":
+		glog.Infof("Expected value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if store[iteration][field.FieldNumber] == field.Value {
+			return true, nil
+		}
+	case "contain_substring":
+		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if !strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+			return true, nil
+		}
+	case "not_contain_substring":
+		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
+		if strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+			return true, nil
+		}
+	default:
+		return false, fmt.Errorf("unknown operation: %s for field number: %d",
+			field.Operation, field.FieldNumber)
+	}
+
+	return false, nil
+}
+
+func getValue(b []byte, index []int, field *types.Field, separator string) (string, error) {
+	if separator == "" {
+		separator = " "
+	}
 	endLine, err := regexp.Compile(`(?m)$`)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	startLine, err := regexp.Compile(`(?m)^`)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	// First, find the end of the line with matching pattern
 	eIndex := endLine.FindIndex(b[index[0]:])
 	if eIndex == nil {
-		return nil, fmt.Errorf("failed to find the end of line in data: %s", string(b[index[0]:]))
+		return "", fmt.Errorf("failed to find the end of line in data: %s", string(b[index[0]:]))
 	}
 	en := index[0] + eIndex[0]
 	// Second, find the start of the string with matching pattern
 	sIndex := startLine.FindAllIndex(b[:en-1], -1)
 	if sIndex == nil {
-		return nil, fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
+		return "", fmt.Errorf("failed to find the start of line in data: %s", string(b[:index[0]]))
 	}
 	st := sIndex[len(sIndex)-1][0]
 	s := string(b[st:en])
 	// Splitting the resulting string using provided separator
-	separator, err := regexp.Compile("[" + capture.Separator + "]+")
+	sepreg, err := regexp.Compile("[" + separator + "]+")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	parts := separator.Split(s, -1)
-	m := make(map[int]interface{})
-	for _, f := range capture.FieldNumber {
-		if len(parts) < f-1 {
-			return nil, fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, capture.Separator, f)
-		}
-		m[f] = strings.Trim(parts[f-1], " \n\t,")
+	parts := sepreg.Split(s, -1)
+	if len(parts) < field.FieldNumber-1 {
+		return "", fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, separator, field.FieldNumber)
 	}
 
-	return m, nil
+	return strings.Trim(parts[field.FieldNumber-1], " \n\t,"), nil
 }

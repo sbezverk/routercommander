@@ -18,9 +18,13 @@ import (
 
 // Router interface is a collection of methods
 
+const (
+	DefaultCommandTimeout = 120
+)
+
 type Router interface {
 	GetName() string
-	GetData(string, bool) ([]byte, error)
+	GetData(string, bool, int) ([]byte, error)
 	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
 	GetLogger() log.Logger
@@ -55,10 +59,13 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.WaitBefore != 0 {
 		Delay(cmd.WaitBefore)
 	}
-
+	commandTimeout := DefaultCommandTimeout
+	if cmd.CmdTimeout != 0 {
+		commandTimeout = cmd.CmdTimeout
+	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +75,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	} else {
 		for _, l := range cmd.Location {
 			fc := c + " " + "location " + l
-			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
+			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
@@ -84,7 +91,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	return results, nil
 }
 
-func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*CmdResult, error) {
+func (r *router) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
 			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
@@ -93,7 +100,7 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*Cm
 		}
 	}
 	if interval == 0 || times == 0 {
-		b, err := r.GetData(cmd, debug)
+		b, err := r.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +115,7 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*Cm
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
-		b, err := r.GetData(cmd, debug)
+		b, err := r.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -140,8 +147,8 @@ func (r *router) Close() {
 	r.sshClient.Close()
 }
 
-func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
-	buffer, err := sendCommand(r.stdin, r.stdout, cmd, debug, r.logger)
+func (r *router) GetData(cmd string, debug bool, commandTimeout int) ([]byte, error) {
+	buffer, err := sendCommand(r.stdin, r.stdout, cmd, debug, r.logger, commandTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -191,17 +198,17 @@ func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
 	// Prepare session with correct parameters
-	if _, err := r.GetData("terminal w 256", false); err != nil {
+	if _, err := r.GetData("terminal w 256", false, DefaultCommandTimeout); err != nil {
 		return nil, err
 	}
-	if _, err := r.GetData("terminal l 0", false); err != nil {
+	if _, err := r.GetData("terminal l 0", false, DefaultCommandTimeout); err != nil {
 		return nil, err
 	}
 
 	return r, nil
 }
 
-func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool, l log.Logger) ([]byte, error) {
+func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool, l log.Logger, commandTimeout int) ([]byte, error) {
 	sanitizedcmd := strings.Replace(cmd, "|", "\\|", -1)
 	// Some h/w specific commands send `\` escape, adding another escape to escape the original
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
@@ -213,7 +220,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	startPattern := regexp.MustCompile(startPartial)
 	errCh := make(chan error)
 	doneCh := make(chan []byte)
-	timeout := time.NewTimer(time.Second * 300)
+	timeout := time.NewTimer(time.Second * time.Duration(commandTimeout))
 	defer func() {
 		close(errCh)
 		close(doneCh)
