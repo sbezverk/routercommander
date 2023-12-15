@@ -55,7 +55,6 @@ func parseCommandFile(b []byte) (*Commander, error) {
 			TriggeredTest: make([]int, 0),
 		}
 	}
-
 	if len(c.Tests) != 0 {
 		c.CommandsWithTests = make(map[string]*Tests)
 		for _, t := range c.Tests {

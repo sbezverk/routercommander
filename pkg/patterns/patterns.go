@@ -40,6 +40,10 @@ var ActiveRP = regexp.MustCompile(`[Aa]ctive`)
 
 var Prompt = regexp.MustCompile(`(?m)RP\/\d\/(RS?P)?\d\/CPU[0-9]:[0-9A-Za-z-\.\_]+(\([0-9A-Za-z-\.\_]+\))?#(\n|$)`)
 
+var SysadminPrompt = regexp.MustCompile(`(?m)sysadmin-vm:[0-1]_RP[0-1]#(\n|$|\s*)`)
+
+var RunShellPrompt = regexp.MustCompile(`(?m)\[[a-zA-Z0-9_\-.]*:~\]\$`)
+
 // // Regular expressions used for parsing  show route  output
 // var IPv4 = regexp.MustCompile(`(?m)(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\,\s+from`)
 // var IPv6 = regexp.MustCompile(`(?m)(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}\,`)

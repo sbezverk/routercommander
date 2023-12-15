@@ -147,7 +147,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendCommand(c+" "+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+		rs, err := r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -354,7 +354,8 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		close(doneCh)
 		timeout.Stop()
 	}()
-	fullInput := make([]byte, 10240*10240)
+	// TODO (sbezverk)  consider buffer resizing logic
+	fullInput := make([]byte, 20480*10240)
 	index := 0
 	startFound := false
 	endFound := false
@@ -379,7 +380,9 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 				if !cmdFound {
 					continue
 				}
-				if patterns.Prompt.FindIndex(fullInput[:index]) != nil {
+				if patterns.Prompt.FindIndex(fullInput[:index]) != nil ||
+					patterns.SysadminPrompt.FindIndex(fullInput[:index]) != nil ||
+					patterns.RunShellPrompt.FindIndex(fullInput[:index]) != nil {
 					if debug {
 						glog.Infof("completed router's reply with prompt: %s\n", string(fullInput[:index]))
 					}
@@ -422,7 +425,13 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		}
 		end := patterns.Prompt.FindIndex(buffer)
 		if end == nil {
-			return nil, fmt.Errorf("failed to find end of command %q in output, buffer: %s", cmd, string(buffer))
+			end = patterns.SysadminPrompt.FindIndex(buffer)
+			if end == nil {
+				end = patterns.RunShellPrompt.FindIndex(buffer)
+				if end == nil {
+					return nil, fmt.Errorf("failed to find end of command %q in output, buffer: %s", cmd, string(buffer))
+				}
+			}
 		}
 		b := make([]byte, len(buffer[start[1]:end[0]]))
 		copy(b, buffer[start[1]:end[0]])

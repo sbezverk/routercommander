@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/golang/glog"
@@ -43,9 +44,10 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 			glog.Infof("routercommander sent log for router: %s", r.GetName())
 		}
 	}()
-	// Setting up to inform main function that the processing is completed
-	defer wg.Done()
-
+	if runtime.GOOS != "windows" {
+		// Setting up to inform main function that the processing is completed
+		defer wg.Done()
+	}
 	triggered := false
 	var err error
 	for it := 0; it < iterations; it++ {
@@ -74,7 +76,7 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 	}
 	if commander.Repro != nil {
 		if triggered {
-			glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
+			glog.Infof("repro process on router %s succeeded triggering the failure condition", r.GetName())
 		} else {
 			glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
 		}
@@ -111,10 +113,12 @@ func processMainGroupOfCommands(r types.Router, commander *types.Commander, iter
 				c.CommandResult.PatternMatch = matches
 			}
 		}
-		if len(c.CommandResult.PatternMatch) != 0 {
-			glog.Infof("router %s: command %q matches:", r.GetName(), c.Cmd)
-			for _, ms := range c.CommandResult.PatternMatch {
-				glog.Infof("\t%s", ms)
+		if glog.V(5) {
+			if len(c.CommandResult.PatternMatch) != 0 {
+				glog.Infof("router %s: command %q matches:", r.GetName(), c.Cmd)
+				for _, ms := range c.CommandResult.PatternMatch {
+					glog.Infof("\t%s", ms)
+				}
 			}
 		}
 		// If no tests to do, just continue pattern matching
@@ -181,7 +185,9 @@ func runTest(results []*types.CmdResult, t *types.Test, iteration int) (bool, er
 		return false, nil
 	}
 	for _, re := range results {
-		glog.Infof("Executing Test ID %d for Command: %q", t.ID, re.Cmd)
+		if glog.V(5) {
+			glog.Infof("Executing Test ID %d for Command: %q", t.ID, re.Cmd)
+		}
 		// Test found, executing it against all instances of Result, the command can return
 		// several instances of Result, when `times` keyword is more than 1
 		if t.Pattern == nil {

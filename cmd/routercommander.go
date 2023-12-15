@@ -84,7 +84,7 @@ func getInfoFromFile(fn string) ([]string, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.4.0           |
+    | routercommander                  v0.4.1           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -166,6 +166,7 @@ func main() {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
+out:
 	for _, router := range routers {
 		li, err := log.NewLogger(router, logLoc)
 		if err != nil {
@@ -179,13 +180,19 @@ func main() {
 			r, err = types.NewRouter(router, port, sshConfig(), li)
 			if err != nil {
 				glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
-				os.Exit(1)
+				break out
 			}
 		}
 		ci := &types.Commander{}
 		*ci = *commands
-		wg.Add(1)
-		go process(r, ci, n)
+		if runtime.GOOS != "windows" {
+			wg.Add(1)
+			go process(r, ci, n)
+		} else {
+			process(r, ci, n)
+		}
 	}
+	glog.Infof("waiting for processes to complete...")
 	wg.Wait()
+	glog.Infof("all processes have finished, exiting...")
 }
