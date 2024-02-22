@@ -166,6 +166,12 @@ func main() {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
+	stopOnError := true
+	if commands != nil {
+		if commands.Collect != nil {
+			stopOnError = commands.Collect.StopOnError
+		}
+	}
 out:
 	for _, router := range routers {
 		li, err := log.NewLogger(router, logLoc)
@@ -180,16 +186,17 @@ out:
 			r, err = types.NewRouter(router, port, sshConfig(), li)
 			if err != nil {
 				glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
-				break out
+				if !stopOnError {
+					continue
+				}
+				goto out
 			}
 		}
-		ci := &types.Commander{}
-		*ci = *commands
 		if runtime.GOOS != "windows" {
 			wg.Add(1)
-			go process(r, ci, n)
+			go process(r, commands, n)
 		} else {
-			process(r, ci, n)
+			process(r, commands, n)
 		}
 	}
 	glog.Infof("waiting for processes to complete...")

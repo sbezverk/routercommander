@@ -3,17 +3,19 @@ package types
 import "regexp"
 
 type Command struct {
-	Cmd           string     `yaml:"command"`
-	CmdTimeout    int        `yaml:"command_timeout"`
-	Times         int        `yaml:"times"`
-	Interval      int        `yaml:"interval"`
-	WaitBefore    int        `yaml:"wait_before"`
-	WaitAfter     int        `yaml:"wait_after"`
-	Location      []string   `yaml:"location"`
-	PipeModifier  string     `yaml:"pipe_modifier"`
-	Debug         bool       `yaml:"debug"`
-	ProcessResult bool       `yaml:"process_result"`
-	Patterns      []*Pattern `yaml:"patterns"`
+	Cmd                string     `yaml:"command"`
+	CmdTimeout         int        `yaml:"command_timeout"`
+	Times              int        `yaml:"times"`
+	Interval           int        `yaml:"interval"`
+	WaitBefore         int        `yaml:"wait_before"`
+	WaitAfter          int        `yaml:"wait_after"`
+	Location           []string   `yaml:"location"`
+	LocationFmtTmpl    string     `yaml:"location_fmt_tmpl"`   // node0_{{.Slot}}_cpu0, default 0/0/cpu0
+	LocationCustomized bool       `yaml:"location_customized"` // position of location is defined by a variable {{.Location}} in a command
+	PipeModifier       string     `yaml:"pipe_modifier"`
+	Debug              bool       `yaml:"debug"`
+	ProcessResult      bool       `yaml:"process_result"`
+	Patterns           []*Pattern `yaml:"patterns"`
 	// TestID used to logically connect the command
 	// from main_command_group to specific set of tests
 	// defined in tests section for a specific command. If TestIDs are not specified
@@ -38,6 +40,7 @@ type Repro struct {
 }
 
 type Collect struct {
+	StopOnError   bool `yaml:"stop_on_error"`
 	ProcessResult bool `yaml:"process_result"`
 }
 

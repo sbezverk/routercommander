@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"io"
 	"strconv"
 
@@ -155,7 +156,11 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			results = append(results, rs...)
 		}
 	} else {
-		rs, err := r.sendCommandWithLocations(cmd, cmd.Location, pipeModifier, commandTimeout)
+		locs, err := prepareLocations(r, cmd)
+		if err != nil {
+			return nil, err
+		}
+		rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -170,9 +175,70 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	return results, nil
 }
 
+func transforLocation(tmpl *template.Template, loc string) (string, error) {
+	l := strings.Split(loc, "/")
+	if len(l) < 3 {
+		return "", fmt.Errorf("location %s is in unknown format", loc)
+	}
+	slot, err := strconv.ParseInt(l[1], 10, 0)
+	if err != nil {
+		return "", err
+	}
+	buf := new(bytes.Buffer)
+	if err := tmpl.Execute(buf, struct {
+		Slot int
+	}{
+		Slot: int(slot),
+	}); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func prepareLocations(r *router, cmd *Command) ([]string, error) {
+	locs := make([]string, 0)
+	for _, l := range cmd.Location {
+		switch l {
+		case "all":
+			locs = append(locs, r.GetAllLocations()...)
+		case "all-rp":
+			locs = append(locs, r.GetAllRPs()...)
+		case "all-lc":
+			locs = append(locs, r.GetAllLCs()...)
+		default:
+			locs = append(locs, l)
+		}
+	}
+	if cmd.LocationFmtTmpl == "" {
+		// No location customization format
+		return locs, nil
+	}
+	tmpl, err := template.New("Slot").Parse(cmd.LocationFmtTmpl)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(locs); i++ {
+		locs[i], err = transforLocation(tmpl, locs[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return locs, nil
+}
+
 func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipeModifier string, commandTimeout int) ([]*CmdResult, error) {
 	results := make([]*CmdResult, 0)
 	locs := make([]string, 0)
+	var tmpl *template.Template
+	var err error
+	if cmd.LocationCustomized {
+		tmpl, err = template.New("Command").Parse(cmd.Cmd)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for _, l := range locations {
 		switch l {
 		case "all":
@@ -197,7 +263,21 @@ func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipe
 			}
 			results = append(results, rs...)
 		default:
-			fc := cmd.Cmd + " " + "location " + l + " " + pipeModifier
+			var fc string
+			if !cmd.LocationCustomized {
+				fc = cmd.Cmd + " " + "location " + l + " " + pipeModifier
+
+			} else {
+				buf := new(bytes.Buffer)
+				if err := tmpl.Execute(buf, struct {
+					Location string
+				}{
+					Location: l,
+				}); err != nil {
+					return nil, err
+				}
+				fc = buf.String() + " " + pipeModifier
+			}
 			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 			if err != nil {
 				return nil, err
