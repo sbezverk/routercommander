@@ -30,9 +30,9 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 	glog.Infof("router %s: command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
 	// Setting up the notification to be sent at the end of execution
 	defer func() {
+		li := r.GetLogger()
 		if n != nil {
 			glog.Infof("notification requested, attempting to send out the log for router %s", r.GetName())
-			li := r.GetLogger()
 			if li == nil {
 				glog.Error("logger interface is nil")
 				return
@@ -43,6 +43,10 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 			}
 			glog.Infof("routercommander sent log for router: %s", r.GetName())
 		}
+		if li != nil {
+			li.Close()
+		}
+		r.Close()
 	}()
 	if runtime.GOOS != "windows" {
 		// Setting up to inform main function that the processing is completed

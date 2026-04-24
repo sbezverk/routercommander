@@ -1,6 +1,6 @@
 collect:
   health_check: true
-main_command_group:
+commands:
   - command: show cef drops
     command_timeout: 30
     times: 1

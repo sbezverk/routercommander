@@ -423,15 +423,13 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	commandParts := strings.Split(s1, " ")
 	startPartial := commandParts[0]
 	startPattern := regexp.MustCompile(startPartial)
-	errCh := make(chan error)
-	doneCh := make(chan []byte)
+	errCh := make(chan error, 1)
+	doneCh := make(chan []byte, 1)
 	if commandTimeout == 0 {
 		commandTimeout = 120
 	}
 	timeout := time.NewTimer(time.Second * time.Duration(commandTimeout))
 	defer func() {
-		close(errCh)
-		close(doneCh)
 		timeout.Stop()
 	}()
 	// TODO (sbezverk)  consider buffer resizing logic

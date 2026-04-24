@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -16,31 +15,33 @@ import (
 	"github.com/sbezverk/routercommander/pkg/messenger"
 	"github.com/sbezverk/routercommander/pkg/messenger/email"
 	"github.com/sbezverk/routercommander/pkg/types"
+	"gopkg.in/yaml.v3"
 )
 
 var (
-	local      bool
-	rtrFile    string
-	rtrName    string
-	cmdFile    string
-	login      string
-	pass       string
-	port       int
-	notify     bool
-	smtpServer string
-	smtpUser   string
-	smtpPass   string
-	smtpFrom   string
-	smtpTo     string
-	logLoc     string
+	local          bool
+	rtrFile        string
+	rtrName        string
+	cmdFile        string
+	login          string
+	pass           string
+	port           int
+	notify         bool
+	smtpServer     string
+	smtpUser       string
+	smtpPass       string
+	smtpFrom       string
+	smtpTo         string
+	logLoc         string
+	knownHostsFile string
 )
 
 var wg sync.WaitGroup
 
 func init() {
-	runtime.GOMAXPROCS(1)
 	flag.BoolVar(&local, "local", false, "when set to true, routercommander is running on the local router")
-	flag.StringVar(&rtrFile, "routers-file", "", "File with routers' names")
+	// Breaking change
+	flag.StringVar(&rtrFile, "routers-file", "", "routers' inventory yaml file")
 	flag.StringVar(&cmdFile, "commands-file", "", "YAML formated file with commands to collect")
 	flag.StringVar(&rtrName, "router-name", "", "name of the router")
 	flag.StringVar(&login, "username", "", "username to use to ssh to a router")
@@ -53,38 +54,103 @@ func init() {
 	flag.StringVar(&smtpFrom, "smtp-from", "", "email address to use for sending the report from")
 	flag.StringVar(&smtpTo, "smtp-to", "", "comma separated list of emails for sending the report to")
 	flag.StringVar(&logLoc, "log", "", "path for the log file.")
+	flag.StringVar(&knownHostsFile, "known-hosts-file", "./routercommander_known_hosts", "path to the known hosts file for SSH")
 }
 
-func getInfoFromFile(fn string) ([]string, error) {
-	list := make([]string, 0)
-	f, err := os.Open(fn)
+type RouterInventory struct {
+	Routers map[string]*RouterTarget `yaml:"routers"`
+}
+
+type RouterTarget struct {
+	Address  string `yaml:"address"`
+	Port     int    `yaml:"port"`
+	Platform string `yaml:"platform"`
+	Username string `yaml:"username"`
+}
+
+type ResolvedTarget struct {
+	Name     string
+	Address  string
+	Port     int
+	Platform string
+	Username string
+}
+
+func normalizeRouterName(name string) string {
+	return strings.Trim(strings.ToLower(strings.TrimSpace(name)), "\n\t,")
+}
+
+func resolveRouterTarget(name string, inventory *RouterInventory, defaultPort int, defaultUser string) (*ResolvedTarget, error) {
+	normalized := normalizeRouterName(name)
+	if inventory == nil {
+		// Not failing if inventory is not provided, will be using specified name as actual address to connect to
+		glog.Warningf("routers inventory is not provided, using specified router name %s as an address to connect to", normalized)
+		return nil, nil
+	}
+	target, ok := inventory.Routers[normalized]
+	if !ok {
+		// Not failing if router is not found in the inventory, will be using specified name as actual address to connect to
+		glog.Warningf("router %s is not found in the inventory, using specified router name as an address to connect to", normalized)
+		return nil, nil
+	}
+	if target.Address == "" {
+		return nil, fmt.Errorf("address for router %s is not specified in the inventory", name)
+	}
+	if target.Port == 0 {
+		target.Port = defaultPort
+	}
+	if target.Username == "" {
+		target.Username = defaultUser
+	}
+	return &ResolvedTarget{
+		Name:     normalized,
+		Address:  target.Address,
+		Port:     target.Port,
+		Platform: target.Platform,
+		Username: target.Username,
+	}, nil
+}
+
+func getRoutersInventory(fileName string) (*RouterInventory, error) {
+	f, err := os.Open(fileName)
 	if err != nil {
-		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
+		return nil, fmt.Errorf("failed to open router inventory file %s with error: %+v", fileName, err)
 	}
 	defer f.Close()
-
-	fr := bufio.NewReader(f)
-	for {
-		item, err := fr.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, err
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read router inventory file %s with error: %+v", fileName, err)
+	}
+	inventory := &RouterInventory{}
+	if err := yaml.Unmarshal(b, inventory); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal router inventory file %s with error: %+v", fileName, err)
+	}
+	normalized := &RouterInventory{
+		Routers: make(map[string]*RouterTarget),
+	}
+	for name, target := range inventory.Routers {
+		normName := normalizeRouterName(name)
+		if normName == "" {
+			glog.Warningf("router with empty name is found in the inventory file %s, skipping...", fileName)
+			continue
 		}
-		list = append(list, strings.Trim(item, "\n"))
-	}
-	if len(list) == 0 {
-		return nil, fmt.Errorf("file %s is empty", fn)
+		if target.Address == "" {
+			glog.Warningf("router %s has empty address in the inventory file %s, skipping...", name, fileName)
+			continue
+		}
+		if target.Port == 0 {
+			target.Port = 22
+		}
+		normalized.Routers[normName] = target
 	}
 
-	return list, nil
+	return normalized, nil
 }
 
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.4.1           |
+    | routercommander                  v0.5.0           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
@@ -95,34 +161,55 @@ func main() {
 
 	glog.Infof("\n%s\n", logo)
 
-	var n messenger.Notifier
-	routers := make([]string, 0)
-
 	if cmdFile == "" {
 		glog.Infof("no commands file is specified, nothing to do, exiting...")
 		os.Exit(1)
 	}
-
+	var n messenger.Notifier
+	routers := make([]string, 0)
+	var inventory *RouterInventory
+	var err error
 	if !local {
-		if login == "" || pass == "" {
-			glog.Error("--username and --password are mandatory parameters, exiting...")
-			os.Exit(1)
-		}
-		if rtrFile != "" && rtrName != "" {
-			glog.Error("--file and --list are mutually exclusive, exiting...")
-			os.Exit(1)
-		}
-		var err error
 		switch {
-		case rtrFile != "":
-			routers, err = getInfoFromFile(rtrFile)
-			if err != nil {
-				glog.Errorf("failed to get routers list from file: %s with error: %+v, exiting...", rtrFile, err)
+		case rtrName != "" && rtrFile == "":
+			// Case when only router's name if provided without inventory file
+			// this case requires both username and password to be provided
+			if login == "" || pass == "" {
+				glog.Error("--username and --password are mandatory parameters, when no inventory file is provided, exiting...")
 				os.Exit(1)
 			}
-		case rtrName != "":
 			routers = append(routers, rtrName)
+		case rtrName != "" && rtrFile != "":
+			// Case when both router's name and inventory file are provided, inventory will be used to get more details abot a router
+			if pass == "" {
+				glog.Error("--password is a mandatory parameter, when routers' inventory file is provided, exiting...")
+				os.Exit(1)
+			}
+			inventory, err = getRoutersInventory(rtrFile)
+			if err != nil {
+				glog.Errorf("failed to get routers inventory from file: %s with error: %+v, exiting...", rtrFile, err)
+				os.Exit(1)
+			}
+			routers = append(routers, rtrName)
+		case rtrName == "" && rtrFile != "":
+			// Case when only inventory file is provided, all routers from the inventory will be processed
+			if pass == "" {
+				glog.Error("--password is a mandatory parameter, when routers' inventory file is provided, exiting...")
+				os.Exit(1)
+			}
+			inventory, err = getRoutersInventory(rtrFile)
+			if err != nil {
+				glog.Errorf("failed to get routers inventory from file: %s with error: %+v, exiting...", rtrFile, err)
+				os.Exit(1)
+			}
+			for name := range inventory.Routers {
+				routers = append(routers, normalizeRouterName(name))
+			}
+		default:
+			glog.Error("either --router-name or --routers-file parameter should be provided, exiting...")
+			os.Exit(1)
 		}
+
 		if notify {
 			failCheck := false
 			switch {
@@ -174,6 +261,24 @@ func main() {
 	}
 out:
 	for _, router := range routers {
+		actRouter := router
+		actPort := port
+		actLogin := login
+		if inventory != nil {
+			target, err := resolveRouterTarget(router, inventory, port, login)
+			if err != nil {
+				glog.Errorf("failed to resolve router target for router: %s with error: %+v", router, err)
+				if !stopOnError {
+					continue
+				}
+				goto out
+			}
+			if target != nil {
+				actRouter = target.Address
+				actPort = target.Port
+				actLogin = target.Username
+			}
+		}
 		li, err := log.NewLogger(router, logLoc)
 		if err != nil {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
@@ -181,11 +286,16 @@ out:
 		}
 		var r types.Router
 		if local {
-			r = types.NewLocalRouter(router, li)
+			r = types.NewLocalRouter(actRouter, li)
 		} else {
-			r, err = types.NewRouter(router, port, sshConfig(), li)
+			sshVerifier, err := NewVerifier(knownHostsFile, false)
 			if err != nil {
-				glog.Errorf("failed to instantiate router object for router: %s with error: %+v", rtrName, err)
+				glog.Errorf("failed to get SSH configuration with error: %+v, exiting...", err)
+				os.Exit(1)
+			}
+			r, err = types.NewRouter(actRouter, actPort, sshVerifier.GetSSHConfig(actLogin, pass), li)
+			if err != nil {
+				glog.Errorf("failed to instantiate router object for router: %s:%d with error: %+v", actRouter, actPort, err)
 				if !stopOnError {
 					continue
 				}
@@ -199,7 +309,6 @@ out:
 			process(r, commands, n)
 		}
 	}
-	glog.Infof("waiting for processes to complete...")
 	wg.Wait()
 	glog.Infof("all processes have finished, exiting...")
 }

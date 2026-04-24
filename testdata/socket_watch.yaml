@@ -14,7 +14,7 @@ repro:
                     # Command to execute if condition is met
   postmortem_command_group:
     - command: 'run for i in {1..200}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
-main_command_group:
+commands:
   - command: "run netstat -s -udp"
     process_result: true
     command_test_id: 1

@@ -1,0 +1,175 @@
+#
+# In collect mode, routercommander collects the output of commands defined under commands tag
+# if commands do not have patterns to look for a specific text in the output or matching against patterns
+# is not required, health_check should be set to false.
+collect:
+  health_check: false
+#
+# In repro mode, the commands defined under the commands tag are  used to trigger and detect
+# a specific issue. In most common case, after the issue is triggered, commands defined by
+# postmortem_command_group is collected.
+# command_processing_rules is optional and considered an advanced feature which allow further
+# customization of the commands to execute as a part of the postmortem.
+repro:
+  #
+  # times defines a number of iterations commands is executed.
+  times: 100
+  #
+  # interval defines an interval between iterations.
+  interval: 21600
+  #
+  # command_processing_rules optional and advanced feature,
+  # defines special processing rules for a command which triggered the match.
+  # Optional if no special processing is needed.
+  command_processing_rules:
+    #
+    # command tag must match to one of the command tag from the commands section, under
+    # this tag the special instructions for its processing are listed.
+    - command: 'run cat /disk0:/6_hours_of_log.txt'
+      tests:
+        - id: 1
+          pattern:
+            pattern_string: 'OOR_'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 2
+          pattern:
+            pattern_string: 'HW_PROG_ERROR'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 3
+          pattern:
+            pattern_string: 'ASIC_RESET'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 4
+          pattern:
+            pattern_string: 'FAULT_ACTION_CARD_RELOAD'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 5
+          pattern:
+            pattern_string: 'ASIC_INIT_FAILURE'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 6
+          pattern:
+            pattern_string: 'Rlimit'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+        - id: 7
+          pattern:
+            pattern_string: 'Dumping'
+          if_triggered_commands:
+            - command: "show controllers np stats traps-all instance all location all"
+            - command: "show controllers np stats counters-all detail instance all location all"
+            - command: "show tech cef"
+              command_timeout: 300
+            - command: "show tech cef platform"
+              command_timeout: 300
+            - command: "show tech ofa"
+              command_timeout: 300
+            - command: "show tech rib"
+              command_timeout: 300
+            - command: "show drops"
+  #
+  # Defines a list of global post mortem commands which will be executed
+  # regardless which command and pattern triggered the match.
+  # postmortem_command_group:
+  #  - command: ''
+#
+# Defines a command group used  to either collect information as in case of collect mode,
+# or to reproduce an issue as in case of repro mode.
+commands:
+ - command: "show alarms detail"
+ - command: "show drops location all"
+ - command: "show controllers np stats traps-all instance all location all" 
+ - command: "show controllers np stats counters-all detail instance all location all" 
+ - command: "show controllers npu resources all location all"
+ - command: "show cef tables"
+ - command: 'show proc memory detail location all | i "node:|l2fib_mgr"'
+ - command: 'run log_start_time=$(date -d "6 hour ago" +"%b %d %H"); show_logging | begin_wrapper "${log_start_time}:" | more "-f" > /disk0:/6_hours_of_log.txt'
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 1
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 2
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 3
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 4
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 5
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 6
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 7
+ - command: 'run cat /disk0:/6_hours_of_log.txt'
+   process_result: true
+   command_test_id: 1

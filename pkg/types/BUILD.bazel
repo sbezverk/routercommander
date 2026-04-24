@@ -1,0 +1,36 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+package(default_visibility = ["//visibility:public"])
+
+go_library(
+    name = "types",
+    srcs = [
+        "commands.go",
+        "local.go",
+        "platform.go",
+        "router.go",
+        "types.go",
+    ],
+    importpath = "github.com/sbezverk/routercommander/pkg/types",
+    deps = [
+        "//pkg/log:log",
+        "//pkg/patterns:patterns",
+        "@com_github_golang_glog//:go_default_library",
+        "@org_golang_x_crypto//ssh",
+        "@in_gopkg_yaml_v3//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "types_test",
+    srcs = [
+        "model_test.go",
+        "platform_test.go",
+        "types_test.go",
+    ],
+    data = ["model.yaml"],
+    embed = [":types"],
+    deps = [
+        "@com_github_go_test_deep//:go_default_library",
+    ],
+)

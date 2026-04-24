@@ -1,0 +1,4 @@
+build:linux_amd64 --platforms=//platforms:linux_amd64
+build:linux_arm64 --platforms=//platforms:linux_arm64
+build:darwin_amd64 --platforms=//platforms:darwin_amd64
+build:darwin_arm64 --platforms=//platforms:darwin_arm64

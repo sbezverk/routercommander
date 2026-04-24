@@ -1,0 +1,18 @@
+routers:
+  r1:
+    address: vxr-slurm-307
+    port: 24965
+    platform: iosxr
+    username: cisco
+
+  r2:
+    address: vxr-slurm-307
+    port: 24966
+    platform: iosxr
+    username: root
+
+  n9kv_switch1:
+    address: 172.23.164.9
+    port: 22
+    platform: nxos
+    username: admin

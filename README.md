@@ -5,7 +5,7 @@
 **routercommander** is the tool developed to automate the process of reproducing issues and the collection a large number of commands from a router or a series of routers. As in example of a taking router's health check, the health check might require to run more than 50 commands, doing it one by one is pure insanity, as it will consume significant time; copy and pasting all commands and pray that there is no any syntax error or pasted commands will be correctly accepted by a router is no better option. **routercommander** will execute each command, collect the output and stored it in the file with a router name and the time stamp as a file name. In addition, **routercommander** allows to extend a bit the collection process by introducing several controlling parameters. For example some commands might need to be executed several time and with a specific time interval between them. Some commands might have a required *location* keyword some not. All these particularities can be controlled from the commands YAML file. Please see below a sample of such file for **show cef drop** command.
 
 ```yaml
-main_command_group:
+commands:
   - command: show cef drops
     times: 2
     interval: 10
@@ -25,7 +25,7 @@ the **pattern** keyword defines a pattern to detect an *alarming condition*, it 
 ## Command customization parameters
 
 ```yaml
-main_command_group:
+commands:
    - command:     < ----- defines a command to execute
      times:          < ----- defines number of times to execute this command,
                            make sense only in collect mode
@@ -76,13 +76,13 @@ repro:
   interval: 10
     command_processing_rules:
     #
-    # command tag must match to one of the command tag from the main_command_group, under
+    # command tag must match to one of the command tag from the commands section, under
     # this tag the special instructions for its processing are listed.
     - command: "run netstat -s -udp"
       patterns:
         #
-        # the value of the pattern_string must match to one of the patterns defined for the command in the main_command_group.
-        # If the pattern_string below had the capture tag in the main_command_group, then the captured
+        # the value of the pattern_string must match to one of the patterns defined for the command in the commands section.
+        # If the pattern_string below had the capture tag in the commands section, then the captured
         # values would be available for the command mutation.
         - pattern_string: 'SndbufErrors:\s*[0-9+]'
           captured_values:
@@ -92,7 +92,7 @@ repro:
             - command: "run netstat -aup | grep tcp"
   postmortem_command_group:
     - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
-main_command_group:
+commands:
   - command: "run netstat -s -udp"
     collect_result: true
     patterns:

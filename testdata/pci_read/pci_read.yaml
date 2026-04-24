@@ -1,0 +1,7 @@
+collect:
+  process_result: true
+commands:
+  - command: run flags=$(pcimemread 0xf0700260 4 | grep -E '[0-9a-fA-F]{8}.*:.*' | awk '{print $3}' ); value=$(printf '%d' 0x${flags}); printf '%x\\n' $(( value & 196608 ));
+    process_result: true
+    debug: true
+  - command: exit

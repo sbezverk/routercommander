@@ -1,0 +1,20 @@
+repro:
+  times: 1
+  stop_when_triggered: true
+tests:
+  - command: 'run lspci -vv'
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: 'LnkSta:\s*Speed\s*5GT/s'
+      if_triggered_commands:
+      - command: "exit"
+      - command: "show inventory"
+collect:
+  process_result: true
+commands:
+  - command: admin
+    process_result: false
+  - command: 'run lspci -vv'
+    process_result: true
+    command_test_ids: [1]

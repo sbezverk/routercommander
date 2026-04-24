@@ -17,7 +17,7 @@ type Command struct {
 	ProcessResult      bool       `yaml:"process_result"`
 	Patterns           []*Pattern `yaml:"patterns"`
 	// TestID used to logically connect the command
-	// from main_command_group to specific set of tests
+	// from commands to specific set of tests
 	// defined in tests section for a specific command. If TestIDs are not specified
 	// then all tests defined for a specific command are executed.
 	TestIDs       []int `yaml:"command_test_ids"`

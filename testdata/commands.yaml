@@ -1,6 +1,6 @@
 collect:
   health_check: false
-main_command_group:
+commands:
   - command: admin show environment all
     pattern:
       #  0/0          NC55-36X100G-A-SE     1050         511       ON

@@ -1,0 +1,44 @@
+collect:
+  process_result: false
+  stop_on_error: false
+commands:
+  - command: run on -f {{.Location}} /pkg/bin/np_perf -e 0 -R | grep TM
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/np_perf -e 1 -R | grep TM
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/np_perf -e 2 -R | grep TM
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/np_perf -e 3 -R | grep TM
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/show_np -e 0 -d pipeline | grep "GLOBAL QUEUE DEPTH"
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/show_np -e 1 -d pipeline | grep "GLOBAL QUEUE DEPTH"
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/show_np -e 2 -d pipeline | grep "GLOBAL QUEUE DEPTH"
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc
+  - command: run on -f {{.Location}} /pkg/bin/show_np -e 3 -d pipeline | grep "GLOBAL QUEUE DEPTH"
+    location_fmt_tmpl: node0_{{.Slot}}_cpu0
+    location_customized: true
+    location:
+      - all-lc

@@ -1,0 +1,26 @@
+repro:
+  times: 1024
+  interval: 120
+  stop_when_triggered: true
+tests:
+  - command: "show lpts pifib statistics hardware police location 0/RP0/CPU0"
+    command_tests:
+    - id: 1
+      pattern:
+        pattern_string: 'LDP-UDP'
+      field_separator: " "
+      fields:
+# LDP-UDP     np             542            1000           518          0           default
+        - field_number: 6
+          operation: "compare_with_value_neq"
+          value: "0"
+collect:
+  process_result: true
+commands:
+  - command: "show controllers npu debugshell 0 'script asic_fmea --type fit --units 0 --api inject_fault --module ts_mon --register ts_mon.slice_interrupt_register[0] --fault_name link_down_interrupt' location 0/RP0/CPU0"
+    wait_after: 4
+  - command: "show controllers npu debugshell 0 'script asic_fmea --type fit --units 0 --api inject_fault --module ts_mon --register ts_mon.slice_interrupt_register[0] --fault_name link_down_interrupt' location 0/RP0/CPU0"
+  - command: "show lpts pifib statistics hardware police location 0/RP0/CPU0"
+    wait_before: 60
+    command_test_ids: [1]
+    
