@@ -1,0 +1,28 @@
+load("@gazelle//:def.bzl", "gazelle")
+
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "routercommander",
+    actual = "//cmd:routercommander",
+)
+
+alias(
+    name = "routercommander_image",
+    actual = "//build:build_routercommander_image_amd64",
+)
+
+alias(
+    name = "routercommander_image_index",
+    actual = "//build:push_routercommander_image",
+)
+
+alias(
+    name = "push_routercommander_image",
+    actual = "//build:push_routercommander_image",
+)
+
+gazelle(
+    name = "gazelle",
+    prefix = "github.com/sbezverk/routercommander",
+)

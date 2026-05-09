@@ -33,9 +33,12 @@ func (l *localRouter) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdRe
 	if cmd.WaitBefore != 0 {
 		Delay(cmd.WaitBefore)
 	}
-
+	commandTimeout := DefaultCommandTimeout
+	if cmd.CmdTimeout != 0 {
+		commandTimeout = cmd.CmdTimeout
+	}
 	var err error
-	rs, err := l.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+	rs, err := l.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +52,7 @@ func (l *localRouter) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdRe
 	return results, nil
 }
 
-func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool) ([]*CmdResult, error) {
+func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
 			glog.Infof("Sending command: %q to router: %q", cmd, l.GetName())
@@ -58,7 +61,7 @@ func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool) (
 		}
 	}
 	if interval == 0 || times == 0 {
-		b, err := l.GetData(cmd, debug)
+		b, err := l.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +81,7 @@ func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool) (
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
-		b, err := l.GetData(cmd, debug)
+		b, err := l.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +103,7 @@ func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool) (
 func (l *localRouter) Close() {
 }
 
-func (l *localRouter) GetData(cmd string, debug bool) ([]byte, error) {
+func (l *localRouter) GetData(cmd string, debug bool, commandTimeout int) ([]byte, error) {
 	parts := strings.Split(cmd, " ")
 	var c *exec.Cmd
 	if len(parts) > 1 {
@@ -119,6 +122,26 @@ func (l *localRouter) GetData(cmd string, debug bool) ([]byte, error) {
 	glog.Infof("><SB> command: %+v", c.String())
 
 	return c.Output()
+}
+
+func (l *localRouter) IsExistingLocation(loc string) bool {
+	return false
+}
+
+func (l *localRouter) GetAllLCs() []string {
+	return nil
+}
+
+func (l *localRouter) GetAllRPs() []string {
+	return nil
+}
+
+func (l *localRouter) GetAllLocations() []string {
+	return nil
+}
+
+func (l *localRouter) GetActiveRP() string {
+	return ""
 }
 
 func NewLocalRouter(router string, li log.Logger) Router {

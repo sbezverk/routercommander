@@ -11,6 +11,8 @@ perf
 *.pdf
 .DS_Store
 *.log
+old_junk/*
+bazel-*
 
 # Test binary, built with `go test -c`
 *.test
@@ -20,3 +22,5 @@ perf
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+*_known_hosts*

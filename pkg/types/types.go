@@ -3,53 +3,78 @@ package types
 import "regexp"
 
 type Command struct {
-	Cmd           string     `yaml:"command"`
-	Times         int        `yaml:"times"`
-	Interval      int        `yaml:"interval"`
-	WaitBefore    int        `yaml:"wait_before"`
-	WaitAfter     int        `yaml:"wait_after"`
-	Location      []string   `yaml:"location"`
-	Debug         bool       `yaml:"debug"`
-	ProcessResult bool       `yaml:"process_result"`
-	Patterns      []*Pattern `yaml:"patterns"`
+	Cmd                string     `yaml:"command"`
+	CmdTimeout         int        `yaml:"command_timeout"`
+	Times              int        `yaml:"times"`
+	Interval           int        `yaml:"interval"`
+	WaitBefore         int        `yaml:"wait_before"`
+	WaitAfter          int        `yaml:"wait_after"`
+	Location           []string   `yaml:"location"`
+	LocationFmtTmpl    string     `yaml:"location_fmt_tmpl"`   // node0_{{.Slot}}_cpu0, default 0/0/cpu0
+	LocationCustomized bool       `yaml:"location_customized"` // position of location is defined by a variable {{.Location}} in a command
+	PipeModifier       string     `yaml:"pipe_modifier"`
+	Debug              bool       `yaml:"debug"`
+	ProcessResult      bool       `yaml:"process_result"`
+	Patterns           []*Pattern `yaml:"patterns"`
+	// TestID used to logically connect the command
+	// from commands to specific set of tests
+	// defined in tests section for a specific command. If TestIDs are not specified
+	// then all tests defined for a specific command are executed.
+	TestIDs       []int `yaml:"command_test_ids"`
+	CommandResult *CommandResult
+}
+
+type Commander struct {
+	Repro             *Repro     `yaml:"repro"`
+	Collect           *Collect   `yaml:"collect"`
+	Tests             []*Tests   `yaml:"tests"`
+	MainCommandGroup  []*Command `yaml:"commands"`
+	CommandsWithTests map[string]*Tests
 }
 
 type Repro struct {
-	Times                    int        `yaml:"times"`
-	Interval                 int        `yaml:"interval"`
-	CommandProcessingRules   []*Command `yaml:"command_processing_rules"`
-	PostMortemCommandGroup   []*Command `yaml:"postmortem_command_group"`
-	CapturedValuesProcessing map[string]map[string]map[int]*CapturedValue
-	PerCmdPerPatternCommands map[string]map[string][]*Command
-}
-type Collect struct {
-	HealthCheck bool `yaml:"health_check"`
-}
-type Commander struct {
-	MainCommandGroup []*Command `yaml:"main_command_group"`
-	Repro            *Repro     `yaml:"repro"`
-	Collect          *Collect   `yaml:"collect"`
+	Times                  int        `yaml:"times"`
+	Interval               int        `yaml:"interval"`
+	PostMortemCommandGroup []*Command `yaml:"if_triggered_commands"`
+	StopWhenTriggered      bool       `yaml:"stop_when_triggered"`
 }
 
-type CapturedValue struct {
+type Collect struct {
+	StopOnError   bool `yaml:"stop_on_error"`
+	ProcessResult bool `yaml:"process_result"`
+}
+
+type Tests struct {
+	Cmd    string  `yaml:"command"`
+	Source []*Test `yaml:"command_tests"`
+	Tests  map[int]*Test
+}
+
+type Test struct {
+	ID                  int        `yaml:"id"`
+	Pattern             *Pattern   `yaml:"pattern"`
+	Occurrence          int        `yaml:"occurrence"`
+	NumberOfOccurences  *int       `yaml:"number_of_occurrences"`
+	Fields              []*Field   `yaml:"fields"`
+	Separator           string     `yaml:"separator"`
+	IfTriggeredCommands []*Command `yaml:"if_triggered_commands"`
+	CheckAllResults     bool       `yaml:"check_all_results"`
+	ValuesStore         map[int]map[int]interface{}
+}
+
+type Field struct {
 	FieldNumber int    `yaml:"field_number"`
 	Operation   string `yaml:"operation"`
 	Value       string `yaml:"value"`
 	Result      interface{}
 }
+
 type Pattern struct {
-	PatternString            string           `yaml:"pattern_string"`
-	Capture                  *Capture         `yaml:"capture"`
-	CapturedValuesProcessing []*CapturedValue `yaml:"captured_values"`
-	PatternCommands          []*Command       `yaml:"pattern_commands"`
-	CheckAllResults          bool             `yaml:"check_all_results"`
-	RegExp                   *regexp.Regexp
-	ValuesStore              map[int]map[int]interface{}
+	PatternString string `yaml:"pattern_string"`
+	RegExp        *regexp.Regexp
 }
 
-type Capture struct {
-	FieldNumber []int  `yaml:"field_number"`
-	Separator   string `yaml:"separator"`
-	Occurrence  int    `yaml:"occurrence"`
-	Values      map[int]interface{}
+type CommandResult struct {
+	PatternMatch  []string
+	TriggeredTest []int
 }

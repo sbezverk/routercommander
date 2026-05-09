@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"io"
 	"strconv"
 
@@ -18,12 +19,139 @@ import (
 
 // Router interface is a collection of methods
 
+const (
+	DefaultCommandTimeout = 120
+)
+
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func normalizePromptBuffer(buffer []byte) []byte {
+	clean := bytes.ReplaceAll(buffer, []byte{0x0d}, nil)
+	return ansiEscape.ReplaceAll(clean, nil)
+}
+
+func findPromptIndex(buffer []byte) []int {
+	clean := normalizePromptBuffer(buffer)
+	for _, p := range []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt} {
+		if idx := p.FindIndex(clean); idx != nil {
+			return idx
+		}
+	}
+	return nil
+}
+
 type Router interface {
+	IsExistingLocation(string) bool
+	GetAllLCs() []string
+	GetAllRPs() []string
+	GetActiveRP() string
+	GetAllLocations() []string
 	GetName() string
-	GetData(string, bool) ([]byte, error)
+	GetData(string, bool, int) ([]byte, error)
 	ProcessCommand(*Command, bool) ([]*CmdResult, error)
 	Close()
 	GetLogger() log.Logger
+}
+
+func (r *router) IsExistingLocation(l string) bool {
+	if r.platform == nil {
+		return false
+	}
+	if r.platform.rps == nil && r.platform.lcs == nil {
+		return false
+	}
+	if r.platform.rps != nil {
+		if _, found := r.platform.rps.rps[l]; found {
+			return true
+		}
+	}
+	if r.platform.lcs != nil {
+		if _, found := r.platform.lcs.lcs[l]; found {
+			return true
+		}
+	}
+	return false
+}
+
+func isXRPlatform(platformType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(platformType))
+	return normalized == "" || normalized == "iosxr" || normalized == "xr"
+}
+
+func sessionSetupCommands(platformType string) []string {
+	if isXRPlatform(platformType) {
+		return []string{"terminal w 256", "terminal l 0"}
+	}
+	return []string{"terminal width 256", "terminal length 0"}
+}
+
+func (r *router) GetAllLCs() []string {
+	if r.platform == nil {
+		return r.GetAllRPs()
+	}
+	if r.platform.lcs == nil {
+		return r.GetAllRPs()
+	}
+	if len(r.platform.lcs.lcs) == 0 {
+		return r.GetAllRPs()
+	}
+	lcs := make([]string, len(r.platform.lcs.lcs))
+	i := 0
+	for lc := range r.platform.lcs.lcs {
+		lcs[i] = lc
+		i++
+	}
+
+	return lcs
+}
+
+func (r *router) GetAllRPs() []string {
+	if r.platform == nil {
+		return nil
+	}
+	if r.platform.rps == nil {
+		return nil
+	}
+	if len(r.platform.rps.rps) == 0 {
+		return nil
+	}
+	rps := make([]string, len(r.platform.rps.rps))
+	i := 0
+	for rp := range r.platform.rps.rps {
+		rps[i] = rp
+		i++
+	}
+
+	return rps
+}
+
+func (r *router) GetAllLocations() []string {
+	locations := make([]string, 0)
+	rps := r.GetAllRPs()
+	if rps != nil {
+		locations = append(locations, rps...)
+	}
+	lcs := r.GetAllLCs()
+	if lcs != nil {
+		locations = append(locations, lcs...)
+	}
+
+	return locations
+}
+
+func (r *router) GetActiveRP() string {
+	if r.platform.rps == nil {
+		return ""
+	}
+	if len(r.platform.rps.rps) == 0 {
+		return ""
+	}
+	for loc, rp := range r.platform.rps.rps {
+		if rp.isActive {
+			return loc
+		}
+	}
+	return ""
 }
 
 func (r *router) GetName() string {
@@ -35,9 +163,8 @@ func (r *router) GetLogger() log.Logger {
 }
 
 type CmdResult struct {
-	Cmd            string
-	Result         []byte
-	CapturedValues map[int]interface{}
+	Cmd    string
+	Result []byte
 }
 
 func Delay(d int) {
@@ -55,10 +182,17 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.WaitBefore != 0 {
 		Delay(cmd.WaitBefore)
 	}
-
+	commandTimeout := DefaultCommandTimeout
+	if cmd.CmdTimeout != 0 && cmd.CmdTimeout > DefaultCommandTimeout {
+		commandTimeout = cmd.CmdTimeout
+	}
+	pipeModifier := ""
+	if cmd.PipeModifier != "" {
+		pipeModifier += " | " + cmd.PipeModifier
+	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendCommand(c, cmd.Times, cmd.Interval, cmd.Debug)
+		rs, err := r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -66,15 +200,16 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			results = append(results, rs...)
 		}
 	} else {
-		for _, l := range cmd.Location {
-			fc := c + " " + "location " + l
-			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug)
-			if err != nil {
-				return nil, err
-			}
-			if collectResult {
-				results = append(results, rs...)
-			}
+		locs, err := prepareLocations(r, cmd)
+		if err != nil {
+			return nil, err
+		}
+		rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+		if err != nil {
+			return nil, err
+		}
+		if collectResult {
+			results = append(results, rs...)
 		}
 	}
 	if cmd.WaitAfter != 0 {
@@ -84,16 +219,130 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	return results, nil
 }
 
-func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*CmdResult, error) {
+func transforLocation(tmpl *template.Template, loc string) (string, error) {
+	l := strings.Split(loc, "/")
+	if len(l) < 3 {
+		return "", fmt.Errorf("location %s is in unknown format", loc)
+	}
+	slot, err := strconv.ParseInt(l[1], 10, 0)
+	if err != nil {
+		return "", err
+	}
+	buf := new(bytes.Buffer)
+	if err := tmpl.Execute(buf, struct {
+		Slot int
+	}{
+		Slot: int(slot),
+	}); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func prepareLocations(r *router, cmd *Command) ([]string, error) {
+	locs := make([]string, 0)
+	for _, l := range cmd.Location {
+		switch l {
+		case "all":
+			locs = append(locs, r.GetAllLocations()...)
+		case "all-rp":
+			locs = append(locs, r.GetAllRPs()...)
+		case "all-lc":
+			locs = append(locs, r.GetAllLCs()...)
+		default:
+			locs = append(locs, l)
+		}
+	}
+	if cmd.LocationFmtTmpl == "" {
+		// No location customization format
+		return locs, nil
+	}
+	tmpl, err := template.New("Slot").Parse(cmd.LocationFmtTmpl)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(locs); i++ {
+		locs[i], err = transforLocation(tmpl, locs[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return locs, nil
+}
+
+func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipeModifier string, commandTimeout int) ([]*CmdResult, error) {
+	results := make([]*CmdResult, 0)
+	locs := make([]string, 0)
+	var tmpl *template.Template
+	var err error
+	if cmd.LocationCustomized {
+		tmpl, err = template.New("Command").Parse(cmd.Cmd)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, l := range locations {
+		switch l {
+		case "all":
+			locs = append(locs, r.GetAllLocations()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		case "all-rp":
+			locs = append(locs, r.GetAllRPs()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		case "all-lc":
+			locs = append(locs, r.GetAllLCs()...)
+			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		default:
+			var fc string
+			if !cmd.LocationCustomized {
+				fc = cmd.Cmd + " " + "location " + l + " " + pipeModifier
+
+			} else {
+				buf := new(bytes.Buffer)
+				if err := tmpl.Execute(buf, struct {
+					Location string
+				}{
+					Location: l,
+				}); err != nil {
+					return nil, err
+				}
+				fc = buf.String() + " " + pipeModifier
+			}
+			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rs...)
+		}
+	}
+
+	return results, nil
+}
+
+func (r *router) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
 	if glog.V(5) {
 		if interval == 0 || times == 0 {
-			glog.Infof("Sending command: %q to router: %q", cmd, r.GetName())
+			glog.Infof("Sending command: %q to router: %q, command timeout: %d seconds", cmd, r.GetName(), commandTimeout)
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, r.GetName())
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q, command timeout: %d seconds", cmd, times, interval, r.GetName(), commandTimeout)
 		}
 	}
 	if interval == 0 || times == 0 {
-		b, err := r.GetData(cmd, debug)
+		b, err := r.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +357,7 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*Cm
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
-		b, err := r.GetData(cmd, debug)
+		b, err := r.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -125,14 +374,16 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool) ([]*Cm
 var _ Router = &router{}
 
 type router struct {
-	name      string
-	port      int
-	sshConfig *ssh.ClientConfig
-	stdin     io.WriteCloser
-	stdout    io.Reader
-	session   *ssh.Session
-	sshClient *ssh.Client
-	logger    log.Logger
+	name         string
+	port         int
+	platformType string
+	sshConfig    *ssh.ClientConfig
+	stdin        io.WriteCloser
+	stdout       io.Reader
+	session      *ssh.Session
+	sshClient    *ssh.Client
+	logger       log.Logger
+	platform     *platform
 }
 
 func (r *router) Close() {
@@ -140,8 +391,8 @@ func (r *router) Close() {
 	r.sshClient.Close()
 }
 
-func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
-	buffer, err := sendCommand(r.stdin, r.stdout, cmd, debug, r.logger)
+func (r *router) GetData(cmd string, debug bool, commandTimeout int) ([]byte, error) {
+	buffer, err := sendCommand(r.stdin, r.stdout, cmd, debug, r.logger, commandTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +400,14 @@ func (r *router) GetData(cmd string, debug bool) ([]byte, error) {
 	return buffer, nil
 }
 
-func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
+func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
 	r := &router{
-		name:      rn,
-		port:      port,
-		sshConfig: sshConfig,
-		logger:    l,
+		name:         rn,
+		port:         port,
+		platformType: platformType,
+		sshConfig:    sshConfig,
+		logger:       l,
+		platform:     &platform{},
 	}
 	// Dial and if successful, create ssh session
 	var err error
@@ -183,43 +436,57 @@ func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (
 
 	r.stdout, err = r.session.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to establish stdin pipe with error: %+v", err)
+		return nil, fmt.Errorf("failed to establish stdout pipe with error: %+v", err)
 	}
 
 	// Start remote shell
 	if err := r.session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
+	banner, err := drainUntilPrompt(r.stdout, []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt}, 30*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to synchronize initial prompt: %w; banner=%s", err, string(banner))
+	}
 	// Prepare session with correct parameters
-	if _, err := r.GetData("terminal w 256", false); err != nil {
+	for _, cmd := range sessionSetupCommands(platformType) {
+		if _, err := r.GetData(cmd, false, DefaultCommandTimeout); err != nil {
+			return nil, err
+		}
+	}
+	if !isXRPlatform(platformType) {
+		return r, nil
+	}
+	// Getting platform information
+	b, err := r.GetData("show platform", false, DefaultCommandTimeout)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := r.GetData("terminal l 0", false); err != nil {
+	p, err := populatePlatformInfo(b)
+	if err != nil {
 		return nil, err
 	}
-
+	r.platform = p
 	return r, nil
 }
 
-func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool, l log.Logger) ([]byte, error) {
+func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool, l log.Logger, commandTimeout int) ([]byte, error) {
 	sanitizedcmd := strings.Replace(cmd, "|", "\\|", -1)
 	// Some h/w specific commands send `\` escape, adding another escape to escape the original
 	s1 := string(bytes.Replace([]byte(sanitizedcmd), []byte(`\`), []byte(`\\`), -1))
 	commandParts := strings.Split(s1, " ")
 	startPartial := commandParts[0]
-	// if len(commandParts) > 1 {
-	// 	startPartial += `\s+` + commandParts[1] + `\s*`
-	// }
 	startPattern := regexp.MustCompile(startPartial)
-	errCh := make(chan error)
-	doneCh := make(chan []byte)
-	timeout := time.NewTimer(time.Second * 300)
+	errCh := make(chan error, 1)
+	doneCh := make(chan []byte, 1)
+	if commandTimeout == 0 {
+		commandTimeout = 120
+	}
+	timeout := time.NewTimer(time.Second * time.Duration(commandTimeout))
 	defer func() {
-		close(errCh)
-		close(doneCh)
 		timeout.Stop()
 	}()
-	fullInput := make([]byte, 10240*10240)
+	// TODO (sbezverk)  consider buffer resizing logic
+	fullInput := make([]byte, 20480*10240)
 	index := 0
 	startFound := false
 	endFound := false
@@ -244,7 +511,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 				if !cmdFound {
 					continue
 				}
-				if patterns.Prompt.FindIndex(fullInput[:index]) != nil {
+				if findPromptIndex(fullInput[:index]) != nil {
 					if debug {
 						glog.Infof("completed router's reply with prompt: %s\n", string(fullInput[:index]))
 					}
@@ -285,7 +552,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		if eol != nil {
 			start[1] = start[0] + eol[0]
 		}
-		end := patterns.Prompt.FindIndex(buffer)
+		end := findPromptIndex(buffer)
 		if end == nil {
 			return nil, fmt.Errorf("failed to find end of command %q in output, buffer: %s", cmd, string(buffer))
 		}
@@ -303,5 +570,49 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	case <-timeout.C:
 		glog.Errorf("router's reply buffer full buffer: %s", string(fullInput))
 		return nil, fmt.Errorf("time out waiting for the result of %q, start found %t, end found %t", cmd, startFound, endFound)
+	}
+}
+
+func drainUntilPrompt(stdout io.Reader, prompt []*regexp.Regexp, timeout time.Duration) ([]byte, error) {
+	buf := make([]byte, 0, 64*1024)
+	tmp := make([]byte, 4096)
+	_ = prompt
+
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+
+	doneCh := make(chan struct {
+		data []byte
+		err  error
+	}, 1)
+
+	go func() {
+		for {
+			n, err := stdout.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+				if findPromptIndex(buf) != nil {
+					doneCh <- struct {
+						data []byte
+						err  error
+					}{data: buf, err: nil}
+					return
+				}
+			}
+			if err != nil {
+				doneCh <- struct {
+					data []byte
+					err  error
+				}{data: buf, err: err}
+				return
+			}
+		}
+	}()
+
+	select {
+	case res := <-doneCh:
+		return res.data, res.err
+	case <-deadline.C:
+		return buf, fmt.Errorf("timeout waiting for initial prompt")
 	}
 }

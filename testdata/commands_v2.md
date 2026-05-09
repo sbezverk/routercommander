@@ -5,20 +5,20 @@ The following file describes the data model and available parameters for routerc
 ```yaml
 
 #
-# In collect mode, routercommander collects the output of commands defined under main_command_group tag
+# In collect mode, routercommander collects the output of commands defined under commands tag
 # if commands do not have patterns to look for a specific text in the output or matching against patterns
 # is not required, health_check should be set to false.
 collect:
   health_check: false
 #
-# In repro mode, the commands defined under the main_command_group tag are  used to trigger and detect
+# In repro mode, the commands defined under the commands tag are  used to trigger and detect
 # a specific issue. In most common case, after the issue is triggered, commands defined by
 # postmortem_command_group is collected.
 # command_processing_rules is optional and considered an advanced feature which allow further
 # customization of the commands to execute as a part of the postmortem.
 repro:
   #
-  # times defines a number of iterations main_command_group is executed.
+  # times defines a number of iterations commands is executed.
   times: 2
   #
   # interval defines an interval between iterations.
@@ -29,13 +29,13 @@ repro:
   # Optional if no special processing is needed.
   command_processing_rules:
     #
-    # command tag must match to one of the command tag from the main_command_group, under
+    # command tag must match to one of the command tag from the commands section, under
     # this tag the special instructions for its processing are listed.
     - command: "run netstat -s -udp"
       patterns:
         #
-        # the value of the pattern_string must match to one of the patterns defined for the command in the main_command_group.
-        # If the pattern_string below had the capture tag in the main_command_group, then the captured
+        # the value of the pattern_string must match to one of the patterns defined for the command in the commands section.
+        # If the pattern_string below had the capture tag in the commands section, then the captured
         # values would be available for the command mutation.
         - pattern_string: 'InMcastPkts:\s*[0-9+]'
           captured_values:
@@ -60,7 +60,7 @@ repro:
 #
 # Defines a command group used  to either collect information as in case of collect mode,
 # or to reproduce an issue as in case of repro mode.
-main_command_group:
+commands:
   - command: "run netstat -s -udp"
     process_result: true
     patterns:

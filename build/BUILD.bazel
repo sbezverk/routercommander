@@ -1,0 +1,20 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "build_routercommander_image_amd64",
+    srcs = ["build_routercommander_image.sh"],
+    args = ["linux/amd64"],
+)
+
+sh_binary(
+    name = "build_routercommander_image_arm64",
+    srcs = ["build_routercommander_image.sh"],
+    args = ["linux/arm64"],
+)
+
+sh_binary(
+    name = "push_routercommander_image",
+    srcs = ["push_routercommander_image.sh"],
+)

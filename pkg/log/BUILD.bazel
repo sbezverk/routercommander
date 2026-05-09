@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+package(default_visibility = ["//visibility:public"])
+
+go_library(
+    name = "log",
+    srcs = ["logger.go"],
+    importpath = "github.com/sbezverk/routercommander/pkg/log",
+    deps = [
+        "@com_github_golang_glog//:go_default_library",
+    ],
+)

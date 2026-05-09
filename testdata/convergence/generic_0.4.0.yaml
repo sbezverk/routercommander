@@ -1,0 +1,95 @@
+#
+# Replace below variables, !!! do NOT use the original file!!!
+# always save changes to a different file. 
+#
+# {{.REMOTE_LOOPBACK}} is loopback of the remote DRC (showld be specified in a form of A.A.A.A/32)
+# {{.REMOTE_DESTINATION}} is destination ip for failed mesh ping session (showld be specified in a form of B.B.B.B/N, where N remote prefix length3
+# {{.VRF_NAME}}   is vrf for the impacted flow
+# {{.INGRESS_LC}} is a line card hosting the source of mesh ping traffic
+# {{.EGRESS_LC}} is a line card facing upstream ORC routers
+# {{.TIME_STAMP}} is a time stamp when the incident occurred, with 1 hour precision, example: Jul 10 0[8-9]
+#
+collect:
+  process_result: false
+commands:
+  - command: show route vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
+  - command: show route {{.REMOTE_LOOPBACK}} det
+  - command: show route {{.LOCAL_LOOPBACK}} det
+  - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} detail
+  - command: show cef {{.REMOTE_LOOPBACK}} detail
+  - command: show cef {{.LOCAL_LOOPBACK}} detail
+  - command: show cef vrf {{.VRF_NAME}} {{.REMOTE_DESTINATION}} hardware egress detail
+    location:
+    - all-lc
+  - command: show cef {{.REMOTE_LOOPBACK}} hardware egress detail
+    location:
+    - all-lc
+  - command: show mpls forwarding prefix {{.REMOTE_LOOPBACK}} det
+  - command: show mpls forwarding prefix {{.REMOTE_LOOPBACK}} hardware egress detail
+    location:
+    - all-lc
+  - command: show cef trace
+    command_timeout: 600
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show ofa trace
+    command_timeout: 600
+    location:
+    - all-lc
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show cef platform trace all all
+    command_timeout: 600
+    location:
+    - all-lc
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show adjacency trace all
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show adjacency platform trace
+    location:
+    - all-lc
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls io trace
+    location:
+    - all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls ldp trace
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls lsd trace
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls traffic-eng trace
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show mpls traffic-eng fast-reroute database
+  - command: show mpls traffic-eng fast-reroute log
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show rsvp api client te trace events
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command:  show rib ipv4 trace
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command:  show ospf trace all
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command:  show rib trace nhid
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show ipv4 trace
+    location:
+    - all-rp
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+  - command: show im database brief view local-data-plane
+    location:
+    - all 
+  - command: show bundle
+  - command: show logging
+    pipe_modifier: "util egrep -e \"{{.TIME_STAMP}}\""
+

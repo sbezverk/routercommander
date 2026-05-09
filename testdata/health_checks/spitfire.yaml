@@ -1,0 +1,77 @@
+collect:
+  process_result: false
+commands:
+  - command: show controller npu voq-usage interface all instance all location all
+  - command: show platform cpu
+  - command: show platform security health
+  - command: show platform
+  - command: show interfaces | in packets/sec | exclude 0 packets
+  - command: show version
+  - command: show install active summary
+  - command: show install committed
+  - command: show install fixes active
+  - command: show install fixes commit
+  - command: show controller npu driver location all | i Mode
+  - command: show interface summary
+  - command: show bundle brief 
+  - command: show proc cpu | inc CPU
+  - command: show context loc all
+  - command: show hw-module fpd
+  - command: show env fan
+  - command: show env power
+  - command: show process blocked location all
+  - command: show asic all summary location 0/rp0/CPU0 
+  - command: dir harddisk:/dumper
+  - command: dir harddisk:/shutdown
+  - command: show bgp ipv4 unicast summary
+  - command: show bgp ipv6 unicast summary
+  - command: show bgp scale
+  - command: show license summary 
+  - command: show route quarantined 
+  - command: show route ipv6 summary
+  - command: show bundle status brief 
+  - command: show health gsp 
+  - command: show health sysdb
+  - command: show health cfgmgr
+  - command: show cef resource | exc GREEN
+  - command: show cef drops location 0/rp0/CPU0 
+  - command: show cef resource loc all | ex GREEN
+  - command: show ofa resources iprte location 0/rp0/CPU0 
+  - command: show ofa resources ip6rte location 0/rp0/CPU0
+  - command: show memory summary  loc all
+  - command: show mpls label table summary
+  - command: show media 
+  - command: show run
+  - command: show run | in hw-module
+  - command: show watchdog memory-state location all   
+  - command: show environment temperature
+  - command: show alarms brief system active
+  - command: show platform security variable dbCisco location all
+  - command: show controllers npu debugshell 0 "script resource_usage 0" location 0/RP0/CPU0 | i "Red|Yellow"
+  - command: show controllers npu debugshell 0 "script resource_usage 0" location 0/RP0/CPU0
+  - command: show controllers npu debugshell 0 "script print_cem_report" location 0/rp0/cpu0
+  - command: show controllers  npu resources all location  all
+  - command: show controllers  npu resources all location  all | inc "Name|In-Use|State"
+  - command: show controllers npu stats counters-all instance all location 0/rp0/CPU0
+  - command: show mpls  traffic-eng tunnels auto-bw brief 
+  - command: show bgp vpnv6 unicast labels
+  - command: show bgp vpnv4 unicast labels
+  - command: show rib ipv4 tables 
+  - command: show rib ipv6 tables 
+  - command: show lpts pifib hardware entry brief location all
+  - command: show im status  brie
+  - command: show bun brief 
+  - command: show ospf interface brief 
+  - command: show int brief 
+  - command: show mpls ldp interface brief 
+  - command: show mpls ldp neighbor brief 
+  - command: show mpls traffic-eng tunnels summary 
+  - command: show mpls traffic-eng tunnels detail 
+  - command: show rsvp interface 
+  - command: show bfd summary 
+  - command: show bfd session
+  - command: show bfd session detail 
+  - command: show process cpu | ex 0%      0%       0%
+  - command: show process memory 
+  - command: show watchdog memory-state location all
+  - command: show log

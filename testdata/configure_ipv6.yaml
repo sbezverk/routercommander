@@ -1,0 +1,106 @@
+#
+# In collect mode, routercommander collects the output of commands defined under commands tag
+# if commands do not have patterns to look for a specific text in the output or matching against patterns
+# is not required, health_check should be set to false.
+collect:
+  health_check: false
+#
+# In repro mode, the commands defined under the commands tag are  used to trigger and detect
+# a specific issue. In most common case, after the issue is triggered, commands defined by
+# postmortem_command_group is collected.
+# command_processing_rules is optional and considered an advanced feature which allow further
+# customization of the commands to execute as a part of the postmortem.
+repro:
+  #
+  # times defines a number of iterations commands is executed.
+  times: 1000 
+  #
+  # interval defines an interval between iterations.
+  interval: 120
+  #
+#
+# Defines a command group used  to either collect information as in case of collect mode,
+# or to reproduce an issue as in case of repro mode.
+commands:
+  - command: "configure term"
+  - command: "ipv6 access-list ZAYO-IPV6INTERNET-IN"
+  - command: "290 permit icmpv6 2000::/3 2607:fb90:cf0::/48"
+  - command: "300 permit icmpv6 2000::/3 2607:fb90:df0::/48"
+  - command: "310 permit icmpv6 2000::/3 2607:fb90:ef0::/48"
+  - command: "320 permit icmpv6 2000::/3 2607:fb90:ff0::/48"
+  - command: "330 permit icmpv6 2000::/3 2607:fb90:10f0::/48"
+  - command: "340 permit icmpv6 2000::/3 2607:fb90:11f0::/48"
+  - command: "350 permit icmpv6 2000::/3 2607:fb90:12f0::/48"
+  - command: "360 permit icmpv6 2000::/3 2607:fb90:fff::/48"
+  - command: "370 permit icmpv6 2000::/3 2607:fb90:13f0::/48"
+  - command: "380 permit icmpv6 2000::/3 2607:fb90:15f0::/48"
+  - command: "390 permit icmpv6 2000::/3 2607:fb90:28f0::/48"
+  - command: "400 permit icmpv6 2000::/3 2607:fb90:c102::/48"
+  - command: "410 permit icmpv6 2000::/3 2607:fb90:c104::/48"
+  - command: "420 permit icmpv6 2000::/3 2607:fb90:c109::/48"
+  - command: "430 permit icmpv6 2000::/3 2607:fb90:c10a::/48"
+  - command: "440 permit icmpv6 2000::/3 2607:fb90:c10b::/48"
+  - command: "450 permit icmpv6 2000::/3 2607:fb90:c10d::/48"
+  - command: "460 permit icmpv6 2000::/3 2607:fb90:c110::/48"
+  - command: "470 permit icmpv6 2000::/3 2607:fb90:c114::/48"
+  - command: "480 permit icmpv6 2000::/3 2607:fb90:c115::/48"
+  - command: "490 permit icmpv6 2000::/3 2607:fb90:c11f::/48"
+  - command: "500 permit icmpv6 2000::/3 2607:fb90:c12c::/48"
+  - command: "510 permit icmpv6 2000::/3 2607:fb90:c12f::/48"
+  - command: "520 permit icmpv6 2000::/3 2607:fb90:c117::/48"
+  - command: "530 permit icmpv6 2000::/3 2607:fb90:c127::/48"
+  - command: "540 permit icmpv6 2000::/3 2607:fb90:c135::/48"
+  - command: "550 permit icmpv6 2000::/3 2607:fb90:c142::/48"
+  - command: "560 permit icmpv6 2000::/3 2607:fb90:c146::/48"
+  - command: "570 permit icmpv6 2000::/3 2607:fb90:c14c::/48"
+  - command: "1000 remark deny ICMP"
+  - command: "1010 deny icmpv6 any any"
+  - command: "1020 remark PERMIT FROM INTERNET UNICAST TO TMOBILE"
+  - command: "1030 permit ipv6 2000::/3 2607:fb90::/28"
+  - command: "1040 deny ipv6 any any"
+  - command: "commit"
+  - command: "end"
+  - command: "show bgp vrf INTERNET ipv6 uni nei 2001:438:fffe::aa1"
+    wait_before: 200
+    process_result: true
+    patterns:
+      - pattern_string: '\s*BGP state = (Idle|Active).*'
+  - command: "configure term"
+  - command: "ipv6 access-list ZAYO-IPV6INTERNET-IN"
+  - command: "290 permit icmpv6 2000::/3 2607:fb90:c10d::/48"
+  - command: "320 permit icmpv6 2000::/3 2607:fb90:df0::/48"
+  - command: "330 permit icmpv6 2000::/3 2607:fb90:ef0::/48"
+  - command: "340 permit icmpv6 2000::/3 2607:fb90:ff0::/48"
+  - command: "350 permit icmpv6 2000::/3 2607:fb90:10f0::/48"
+  - command: "360 permit icmpv6 2000::/3 2607:fb90:11f0::/48"
+  - command: "370 permit icmpv6 2000::/3 2607:fb90:12f0::/48"
+  - command: "380 permit icmpv6 2000::/3 2607:fb90:fff::/48"
+  - command: "390 permit icmpv6 2000::/3 2607:fb90:13f0::/48"
+  - command: "400 permit icmpv6 2000::/3 2607:fb90:15f0::/48"
+  - command: "410 permit icmpv6 2000::/3 2607:fb90:28f0::/48"
+  - command: "420 remark deny ICMP"
+  - command: "430 deny icmpv6 any any"
+  - command: "440 remark PERMIT FROM INTERNET UNICAST TO TMOBILE"
+  - command: "450 permit ipv6 2000::/3 2607:fb90::/28"
+  - command: " 460 deny ipv6 any any"
+  - command: "no 460"
+  - command: "no 470"
+  - command: "no 480"
+  - command: "no 490"
+  - command: "no 500"
+  - command: "no 510"
+  - command: "no 520"
+  - command: "no 530"
+  - command: "no 540"
+  - command: "no 550"
+  - command: "no 560"
+  - command: "no 570"
+  - command: "no 1000"
+  - command: "no 1010"
+  - command: "no 1020"
+  - command: "no 1030"
+  - command: "no 1040"
+  - command: "commit"
+  - command: "end"
+  - command: "show logg last 10"
+    debug: true

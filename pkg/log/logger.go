@@ -3,8 +3,11 @@ package log
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 type Logger interface {
@@ -138,15 +141,21 @@ func (l logger) worker() {
 	}
 }
 
-func NewLogger(prefix string) (Logger, error) {
+func NewLogger(prefix string, logLoc string) (Logger, error) {
 	ts := strings.Replace(time.Now().Format("2006-01-02_15:04:05"), " ", "_", -1)
-	fileName := "./logs/" + prefix + "_" + ts + ".log"
+	ts = strings.Replace(ts, ":", "-", -1)
+	if logLoc == "" {
+		logLoc = "." + string(os.PathSeparator)
+	}
+	if logLoc[len(logLoc)-1] != os.PathSeparator {
+		logLoc += string(os.PathSeparator)
+	}
+	fileName := filepath.Join(logLoc + prefix + "_" + ts + ".log")
 	f, err := os.Create(fileName)
 	if err != nil {
-
 		return nil, err
 	}
-
+	glog.Infof("log for router: %s has been created at %s location", prefix, fileName)
 	l := &logger{
 		f:     f,
 		input: make(chan *data),

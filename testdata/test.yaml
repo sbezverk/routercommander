@@ -1,0 +1,4 @@
+collect:
+  health_check: false
+commands:
+  - command: show version

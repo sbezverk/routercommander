@@ -1,3 +1,5 @@
+collect:
+  health_check: false
 commands:
   - command: admin show environment all
     pattern:
