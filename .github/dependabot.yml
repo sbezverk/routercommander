@@ -9,9 +9,6 @@ updates:
       time: "06:00"
       timezone: "Europe/Rome"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "go"
     commit-message:
       prefix: "deps"
     groups:
