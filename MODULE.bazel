@@ -8,7 +8,6 @@ bazel_dep(name = "gazelle", version = "0.47.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "github_com_sbezverk_tools", version = "0.0.0")
-
 local_path_override(
     module_name = "github_com_sbezverk_tools",
     path = "../tools",
@@ -16,11 +15,10 @@ local_path_override(
 
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
-
 use_repo(
     go_deps,
     "com_github_go_test_deep",
     "com_github_golang_glog",
-    "org_golang_x_crypto",
     "in_gopkg_yaml_v3",
+    "org_golang_x_crypto",
 )
