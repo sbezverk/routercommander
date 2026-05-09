@@ -23,6 +23,23 @@ const (
 	DefaultCommandTimeout = 120
 )
 
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func normalizePromptBuffer(buffer []byte) []byte {
+	clean := bytes.ReplaceAll(buffer, []byte{0x0d}, nil)
+	return ansiEscape.ReplaceAll(clean, nil)
+}
+
+func findPromptIndex(buffer []byte) []int {
+	clean := normalizePromptBuffer(buffer)
+	for _, p := range []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt} {
+		if idx := p.FindIndex(clean); idx != nil {
+			return idx
+		}
+	}
+	return nil
+}
+
 type Router interface {
 	IsExistingLocation(string) bool
 	GetAllLCs() []string
@@ -37,17 +54,41 @@ type Router interface {
 }
 
 func (r *router) IsExistingLocation(l string) bool {
-	if _, found := r.platform.rps.rps[l]; found {
-		return true
+	if r.platform == nil {
+		return false
 	}
-	if _, found := r.platform.lcs.lcs[l]; found {
-		return true
+	if r.platform.rps == nil && r.platform.lcs == nil {
+		return false
 	}
-
+	if r.platform.rps != nil {
+		if _, found := r.platform.rps.rps[l]; found {
+			return true
+		}
+	}
+	if r.platform.lcs != nil {
+		if _, found := r.platform.lcs.lcs[l]; found {
+			return true
+		}
+	}
 	return false
 }
 
+func isXRPlatform(platformType string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(platformType))
+	return normalized == "" || normalized == "iosxr" || normalized == "xr"
+}
+
+func sessionSetupCommands(platformType string) []string {
+	if isXRPlatform(platformType) {
+		return []string{"terminal w 256", "terminal l 0"}
+	}
+	return []string{"terminal width 256", "terminal length 0"}
+}
+
 func (r *router) GetAllLCs() []string {
+	if r.platform == nil {
+		return r.GetAllRPs()
+	}
 	if r.platform.lcs == nil {
 		return r.GetAllRPs()
 	}
@@ -65,6 +106,9 @@ func (r *router) GetAllLCs() []string {
 }
 
 func (r *router) GetAllRPs() []string {
+	if r.platform == nil {
+		return nil
+	}
 	if r.platform.rps == nil {
 		return nil
 	}
@@ -330,15 +374,16 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool, comman
 var _ Router = &router{}
 
 type router struct {
-	name      string
-	port      int
-	sshConfig *ssh.ClientConfig
-	stdin     io.WriteCloser
-	stdout    io.Reader
-	session   *ssh.Session
-	sshClient *ssh.Client
-	logger    log.Logger
-	platform  *platform
+	name         string
+	port         int
+	platformType string
+	sshConfig    *ssh.ClientConfig
+	stdin        io.WriteCloser
+	stdout       io.Reader
+	session      *ssh.Session
+	sshClient    *ssh.Client
+	logger       log.Logger
+	platform     *platform
 }
 
 func (r *router) Close() {
@@ -355,12 +400,14 @@ func (r *router) GetData(cmd string, debug bool, commandTimeout int) ([]byte, er
 	return buffer, nil
 }
 
-func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
+func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientConfig, l log.Logger) (Router, error) {
 	r := &router{
-		name:      rn,
-		port:      port,
-		sshConfig: sshConfig,
-		logger:    l,
+		name:         rn,
+		port:         port,
+		platformType: platformType,
+		sshConfig:    sshConfig,
+		logger:       l,
+		platform:     &platform{},
 	}
 	// Dial and if successful, create ssh session
 	var err error
@@ -389,19 +436,25 @@ func NewRouter(rn string, port int, sshConfig *ssh.ClientConfig, l log.Logger) (
 
 	r.stdout, err = r.session.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("failed to establish stdin pipe with error: %+v", err)
+		return nil, fmt.Errorf("failed to establish stdout pipe with error: %+v", err)
 	}
 
 	// Start remote shell
 	if err := r.session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
-	// Prepare session with correct parameters
-	if _, err := r.GetData("terminal w 256", false, DefaultCommandTimeout); err != nil {
-		return nil, err
+	banner, err := drainUntilPrompt(r.stdout, []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt}, 30*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("failed to synchronize initial prompt: %w; banner=%s", err, string(banner))
 	}
-	if _, err := r.GetData("terminal l 0", false, DefaultCommandTimeout); err != nil {
-		return nil, err
+	// Prepare session with correct parameters
+	for _, cmd := range sessionSetupCommands(platformType) {
+		if _, err := r.GetData(cmd, false, DefaultCommandTimeout); err != nil {
+			return nil, err
+		}
+	}
+	if !isXRPlatform(platformType) {
+		return r, nil
 	}
 	// Getting platform information
 	b, err := r.GetData("show platform", false, DefaultCommandTimeout)
@@ -458,9 +511,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 				if !cmdFound {
 					continue
 				}
-				if patterns.Prompt.FindIndex(fullInput[:index]) != nil ||
-					patterns.SysadminPrompt.FindIndex(fullInput[:index]) != nil ||
-					patterns.RunShellPrompt.FindIndex(fullInput[:index]) != nil {
+				if findPromptIndex(fullInput[:index]) != nil {
 					if debug {
 						glog.Infof("completed router's reply with prompt: %s\n", string(fullInput[:index]))
 					}
@@ -501,15 +552,9 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		if eol != nil {
 			start[1] = start[0] + eol[0]
 		}
-		end := patterns.Prompt.FindIndex(buffer)
+		end := findPromptIndex(buffer)
 		if end == nil {
-			end = patterns.SysadminPrompt.FindIndex(buffer)
-			if end == nil {
-				end = patterns.RunShellPrompt.FindIndex(buffer)
-				if end == nil {
-					return nil, fmt.Errorf("failed to find end of command %q in output, buffer: %s", cmd, string(buffer))
-				}
-			}
+			return nil, fmt.Errorf("failed to find end of command %q in output, buffer: %s", cmd, string(buffer))
 		}
 		b := make([]byte, len(buffer[start[1]:end[0]]))
 		copy(b, buffer[start[1]:end[0]])
@@ -525,5 +570,49 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	case <-timeout.C:
 		glog.Errorf("router's reply buffer full buffer: %s", string(fullInput))
 		return nil, fmt.Errorf("time out waiting for the result of %q, start found %t, end found %t", cmd, startFound, endFound)
+	}
+}
+
+func drainUntilPrompt(stdout io.Reader, prompt []*regexp.Regexp, timeout time.Duration) ([]byte, error) {
+	buf := make([]byte, 0, 64*1024)
+	tmp := make([]byte, 4096)
+	_ = prompt
+
+	deadline := time.NewTimer(timeout)
+	defer deadline.Stop()
+
+	doneCh := make(chan struct {
+		data []byte
+		err  error
+	}, 1)
+
+	go func() {
+		for {
+			n, err := stdout.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+				if findPromptIndex(buf) != nil {
+					doneCh <- struct {
+						data []byte
+						err  error
+					}{data: buf, err: nil}
+					return
+				}
+			}
+			if err != nil {
+				doneCh <- struct {
+					data []byte
+					err  error
+				}{data: buf, err: err}
+				return
+			}
+		}
+	}()
+
+	select {
+	case res := <-doneCh:
+		return res.data, res.err
+	case <-deadline.C:
+		return buf, fmt.Errorf("timeout waiting for initial prompt")
 	}
 }

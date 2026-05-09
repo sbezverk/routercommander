@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/golang/glog"
@@ -14,7 +13,7 @@ import (
 	"github.com/sbezverk/routercommander/pkg/types"
 )
 
-func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
+func process(r types.Router, commander *types.Commander, n messenger.Notifier) error {
 	iterations := 1
 	interval := 0
 	stopWhenTriggered := true
@@ -48,10 +47,6 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 		}
 		r.Close()
 	}()
-	if runtime.GOOS != "windows" {
-		// Setting up to inform main function that the processing is completed
-		defer wg.Done()
-	}
 	triggered := false
 	var err error
 	for it := 0; it < iterations; it++ {
@@ -59,7 +54,7 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 			glog.Infof("router %s: executing iteration - %d/%d", r.GetName(), it+1, iterations)
 		}
 		if triggered, err = processMainGroupOfCommands(r, commander, it); err != nil {
-			glog.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
+			return fmt.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
 		}
 		if triggered {
 			// If the issue was triggered, collecting common Repro.PostMortemCommandGroup commands needed to troubleshooting
@@ -67,8 +62,7 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 			for _, c := range commander.Repro.PostMortemCommandGroup {
 				_, err := r.ProcessCommand(c, true)
 				if err != nil {
-					glog.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
-					return
+					return fmt.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
 				}
 			}
 			if stopWhenTriggered {
@@ -85,6 +79,7 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) {
 			glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
 		}
 	}
+	return nil
 }
 
 func processMainGroupOfCommands(r types.Router, commander *types.Commander, iteration int) (bool, error) {

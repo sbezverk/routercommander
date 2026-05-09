@@ -71,15 +71,22 @@ func (v *verifier) remoteHostKeyCallback(hostname string, remote net.Addr, key s
 func normalizeKnownHost(hostname string) string {
 	host := strings.TrimSpace(hostname)
 
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	h, p, err := net.SplitHostPort(host)
+	if err != nil {
+		host = strings.TrimPrefix(host, "[")
+		host = strings.TrimSuffix(host, "]")
+		return strings.ToLower(host)
 	}
 
-	host = strings.TrimPrefix(host, "[")
-	host = strings.TrimSuffix(host, "]")
-	host = strings.ToLower(host)
+	h = strings.TrimPrefix(h, "[")
+	h = strings.TrimSuffix(h, "]")
+	h = strings.ToLower(h)
 
-	return host
+	if p == "22" {
+		return h
+	}
+
+	return h + ":" + p
 }
 
 func NewVerifier(knownHostsFile string, isInsecure bool) (Verifier, error) {

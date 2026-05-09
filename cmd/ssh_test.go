@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"crypto/rsa"
 	"os"
@@ -61,11 +62,12 @@ func TestNormalizeKnownHost(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "hostname with port", in: "Router1.example.com:22", want: "router1.example.com"},
+		{name: "hostname with default port", in: "Router1.example.com:22", want: "router1.example.com"},
 		{name: "hostname only", in: "Router1.example.com", want: "router1.example.com"},
-		{name: "ipv4 with port", in: "192.0.2.10:22", want: "192.0.2.10"},
-		{name: "ipv6 bracketed with port", in: "[2001:db8::1]:22", want: "2001:db8::1"},
+		{name: "ipv4 with default port", in: "192.0.2.10:22", want: "192.0.2.10"},
+		{name: "ipv6 bracketed with default port", in: "[2001:db8::1]:22", want: "2001:db8::1"},
 		{name: "ipv6 bracketed without port", in: "[2001:db8::1]", want: "2001:db8::1"},
+		{name: "hostname with non-default port", in: "Router1.example.com:2222", want: "router1.example.com:2222"},
 	}
 
 	for _, tt := range tests {
@@ -103,7 +105,27 @@ func TestRemoteHostKeyCallbackTOFUAndMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read known hosts file: %v", err)
 	}
-	if !strings.Contains(string(contents), normalizedHost) {
+	foundNormalized := false
+	scanner := bufio.NewScanner(strings.NewReader(string(contents)))
+	for scanner.Scan() {
+		_, hosts, _, _, _, err := ssh.ParseKnownHosts(scanner.Bytes())
+		if err != nil {
+			t.Fatalf("failed to parse persisted known_hosts line: %v", err)
+		}
+		for _, hostEntry := range hosts {
+			if normalizeKnownHost(hostEntry) == normalizedHost {
+				foundNormalized = true
+				break
+			}
+		}
+		if foundNormalized {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("failed reading known_hosts content: %v", err)
+	}
+	if !foundNormalized {
 		t.Fatalf("known hosts file does not contain normalized host %q: %s", normalizedHost, string(contents))
 	}
 

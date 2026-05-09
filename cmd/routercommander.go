@@ -34,6 +34,7 @@ var (
 	smtpTo         string
 	logLoc         string
 	knownHostsFile string
+	insecureSSH    bool
 )
 
 var wg sync.WaitGroup
@@ -54,7 +55,8 @@ func init() {
 	flag.StringVar(&smtpFrom, "smtp-from", "", "email address to use for sending the report from")
 	flag.StringVar(&smtpTo, "smtp-to", "", "comma separated list of emails for sending the report to")
 	flag.StringVar(&logLoc, "log", "", "path for the log file.")
-	flag.StringVar(&knownHostsFile, "known-hosts-file", "./routercommander_known_hosts", "path to the known hosts file for SSH")
+	flag.StringVar(&knownHostsFile, "known-hosts-file", "/tmp/routercommander_known_hosts", "path to the known hosts file for SSH")
+	flag.BoolVar(&insecureSSH, "insecure-ssh", false, "when set to true, SSH host key verification will be disabled and new host keys will not be added to the known hosts file")
 }
 
 type RouterInventory struct {
@@ -169,6 +171,8 @@ func main() {
 	routers := make([]string, 0)
 	var inventory *RouterInventory
 	var err error
+	var fatalErr error
+	singleRouterCase := rtrName != ""
 	if !local {
 		switch {
 		case rtrName != "" && rtrFile == "":
@@ -259,27 +263,37 @@ func main() {
 			stopOnError = commands.Collect.StopOnError
 		}
 	}
-out:
+	errCh := make(chan error, (len(routers)))
+	runProcessing := func(r types.Router) {
+		errCh <- process(r, commands, n)
+	}
+
+	processesStarted := 0
 	for _, router := range routers {
 		actRouter := router
 		actPort := port
 		actLogin := login
+		actPlatform := ""
 		if inventory != nil {
-			target, err := resolveRouterTarget(router, inventory, port, login)
+			var target *ResolvedTarget
+			target, err = resolveRouterTarget(router, inventory, port, login)
 			if err != nil {
 				glog.Errorf("failed to resolve router target for router: %s with error: %+v", router, err)
-				if !stopOnError {
+				if !stopOnError && !singleRouterCase {
 					continue
 				}
-				goto out
+				fatalErr = err
+				break
 			}
 			if target != nil {
 				actRouter = target.Address
 				actPort = target.Port
+				actPlatform = target.Platform
 				actLogin = target.Username
 			}
 		}
-		li, err := log.NewLogger(router, logLoc)
+		var li log.Logger
+		li, err = log.NewLogger(router, logLoc)
 		if err != nil {
 			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
 			os.Exit(1)
@@ -288,27 +302,47 @@ out:
 		if local {
 			r = types.NewLocalRouter(actRouter, li)
 		} else {
-			sshVerifier, err := NewVerifier(knownHostsFile, false)
+			var sshVerifier Verifier
+			sshVerifier, err = NewVerifier(knownHostsFile, insecureSSH)
 			if err != nil {
 				glog.Errorf("failed to get SSH configuration with error: %+v, exiting...", err)
 				os.Exit(1)
 			}
-			r, err = types.NewRouter(actRouter, actPort, sshVerifier.GetSSHConfig(actLogin, pass), li)
+			r, err = types.NewRouter(actRouter, actPort, actPlatform, sshVerifier.GetSSHConfig(actLogin, pass), li)
 			if err != nil {
 				glog.Errorf("failed to instantiate router object for router: %s:%d with error: %+v", actRouter, actPort, err)
-				if !stopOnError {
+				if !stopOnError && !singleRouterCase {
 					continue
 				}
-				goto out
+				fatalErr = err
+				break
 			}
 		}
 		if runtime.GOOS != "windows" {
 			wg.Add(1)
-			go process(r, commands, n)
+			go func(r types.Router) {
+				defer wg.Done()
+				runProcessing(r)
+			}(r)
 		} else {
-			process(r, commands, n)
+			runProcessing(r)
+		}
+		processesStarted++
+	}
+	if fatalErr == nil {
+		wg.Wait()
+		for i := 0; i < processesStarted; i++ {
+			err := <-errCh
+			if err != nil {
+				glog.Errorf("processing finished with error: %+v", err)
+				os.Exit(1)
+			}
 		}
 	}
-	wg.Wait()
+	close(errCh)
 	glog.Infof("all processes have finished, exiting...")
+	if fatalErr == nil {
+		os.Exit(0)
+	}
+	os.Exit(1)
 }
