@@ -7,7 +7,7 @@ require (
 	github.com/golang/glog v1.2.5
 	github.com/sbezverk/tools v0.0.0-20230829072858-5ef962b0f1c0
 	golang.org/x/crypto v0.38.0
-	gopkg.in/yaml.v3 v3.0.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
