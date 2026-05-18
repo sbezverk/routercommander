@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/log"
 	"github.com/sbezverk/routercommander/pkg/messenger"
@@ -278,7 +280,7 @@ func main() {
 
 	if passwordStdin {
 		var pw string
-		pw, err = readPasswordFromStdin(5 * time.Second)
+		pw, err = readPasswordFromStdin()
 		if err != nil {
 			glog.Errorf("failed to read password from stdin with error: %+v, exiting...", err)
 			os.Exit(1)
@@ -351,6 +353,7 @@ func main() {
 		err := <-errCh
 		if err != nil {
 			glog.Errorf("processing finished with error: %+v", err)
+			fatalErr = err
 		}
 	}
 	wg.Wait()
@@ -362,32 +365,33 @@ func main() {
 	os.Exit(1)
 }
 
-func readPasswordFromStdin(timeout time.Duration) (string, error) {
-	type result struct {
-		password string
-		err      error
-	}
-
-	ch := make(chan result, 1)
-
-	go func() {
-		s, err := bufio.NewReader(os.Stdin).ReadString('\n')
+func readPasswordFromStdin() (string, error) {
+	pw := ""
+	s := ""
+	var err error
+	if term.IsTerminal(uintptr(os.Stdin.Fd())) {
+		fmt.Fprintf(os.Stdout, "Session password: ")
+		var bytePassword []byte
+		bytePassword, err = term.ReadPassword(uintptr(os.Stdin.Fd()))
+		fmt.Fprintln(os.Stdout)
 		if err != nil {
-			ch <- result{"", err}
-			return
+			return "", fmt.Errorf("failed to read password from terminal with error: %+v", err)
 		}
-		pw := strings.TrimRight(s, "\r\n")
-		if pw == "" {
-			ch <- result{"", fmt.Errorf("no password received on stdin")}
-			return
+		s = string(bytePassword)
+	} else {
+		if err = os.Stdin.SetReadDeadline(time.Now().Add(5 * time.Second)); err == nil {
+			defer os.Stdin.SetReadDeadline(time.Time{})
 		}
-		ch <- result{pw, nil}
-	}()
-
-	select {
-	case r := <-ch:
-		return r.password, r.err
-	case <-time.After(timeout):
-		return "", fmt.Errorf("timed out waiting for password on stdin")
+		s, err = bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && !(errors.Is(err, io.EOF) && s != "") {
+			return "", fmt.Errorf("failed to read password from stdin: %+v", err)
+		}
 	}
+
+	pw = strings.TrimRight(s, "\r\n")
+	if pw == "" {
+		return "", fmt.Errorf("no password received on stdin")
+	}
+
+	return pw, nil
 }

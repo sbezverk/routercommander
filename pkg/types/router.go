@@ -449,16 +449,17 @@ func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientCo
 	}
 
 	// Start remote shell
-	if err := r.session.Shell(); err != nil {
+	if err = r.session.Shell(); err != nil {
 		return nil, fmt.Errorf("failed to establish a session shell with error: %+v", err)
 	}
-	banner, err := drainUntilPrompt(r.stdout, []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt}, 30*time.Second)
+	var banner []byte
+	banner, err = drainUntilPrompt(r.stdout, []*regexp.Regexp{patterns.Prompt, patterns.SysadminPrompt, patterns.RunShellPrompt, patterns.NXOSPrompt}, 30*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to synchronize initial prompt: %w; banner=%s", err, string(banner))
 	}
 	// Prepare session with correct parameters
 	for _, cmd := range sessionSetupCommands(platformType) {
-		if _, err := r.GetData(cmd, false, DefaultCommandTimeout); err != nil {
+		if _, err = r.GetData(cmd, false, DefaultCommandTimeout); err != nil {
 			return nil, err
 		}
 	}
@@ -466,11 +467,13 @@ func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientCo
 		return r, nil
 	}
 	// Getting platform information
-	b, err := r.GetData("show platform", false, DefaultCommandTimeout)
+	var b []byte
+	b, err = r.GetData("show platform", false, DefaultCommandTimeout)
 	if err != nil {
 		return nil, err
 	}
-	p, err := populatePlatformInfo(b)
+	var p *platform
+	p, err = populatePlatformInfo(b)
 	if err != nil {
 		return nil, err
 	}
@@ -494,6 +497,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	defer func() {
 		timeout.Stop()
 	}()
+	// fullInput should not be used outside of this go routine as it is not protected from a race condition.
 	var fullInput bytes.Buffer
 	var startFound, endFound atomic.Bool
 	startFound.Store(false)

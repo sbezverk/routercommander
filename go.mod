@@ -3,6 +3,7 @@ module github.com/sbezverk/routercommander
 go 1.25.0
 
 require (
+	github.com/charmbracelet/x/term v0.2.2
 	github.com/go-test/deep v1.1.1
 	github.com/golang/glog v1.2.5
 	github.com/sbezverk/tools v0.0.0-20230829072858-5ef962b0f1c0
