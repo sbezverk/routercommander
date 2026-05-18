@@ -332,7 +332,7 @@ func check(op string, iteration int, field *types.Field, store map[int]map[int]i
 			return false, nil
 		}
 		glog.Infof("Previous value: %s current value: %s", store[iteration-1][field.FieldNumber], store[iteration][field.FieldNumber])
-		if store[iteration][field.FieldNumber] != store[iteration-1][field.FieldNumber] {
+		if store[iteration][field.FieldNumber] == store[iteration-1][field.FieldNumber] {
 			return true, nil
 		}
 	case "compare_with_value_neq":
@@ -346,13 +346,21 @@ func check(op string, iteration int, field *types.Field, store map[int]map[int]i
 			return true, nil
 		}
 	case "contain_substring":
-		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
-		if !strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+		sv, ok := store[iteration][field.FieldNumber].(string)
+		if !ok {
+			return false, fmt.Errorf("field %d value is not a string for operation %s", field.FieldNumber, op)
+		}
+		glog.Infof("substring value: %s current value: %s", field.Value, sv)
+		if !strings.Contains(sv, field.Value) {
 			return true, nil
 		}
 	case "not_contain_substring":
-		glog.Infof("substring value: %s current value: %s", field.Value, store[iteration][field.FieldNumber])
-		if strings.Contains(store[iteration][field.FieldNumber].(string), field.Value) {
+		sv, ok := store[iteration][field.FieldNumber].(string)
+		if !ok {
+			return false, fmt.Errorf("field %d value is not a string for operation %s", field.FieldNumber, op)
+		}
+		glog.Infof("substring value: %s current value: %s", field.Value, sv)
+		if strings.Contains(sv, field.Value) {
 			return true, nil
 		}
 	default:
@@ -394,8 +402,8 @@ func getValue(b []byte, index []int, field *types.Field, separator string) (stri
 		return "", err
 	}
 	parts := sepreg.Split(s, -1)
-	if len(parts) < field.FieldNumber-1 {
-		return "", fmt.Errorf("failed to split string %s with separator %q to have field number %d", s, separator, field.FieldNumber)
+	if len(parts) <= field.FieldNumber {
+		return "", fmt.Errorf("failed to split string %s, separator: %s, field number: %d", s, separator, field.FieldNumber)
 	}
 
 	return strings.Trim(parts[field.FieldNumber], " \n\t,"), nil

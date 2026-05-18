@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -56,10 +57,14 @@ func (q *queue) Push(b []byte) {
 }
 
 func (q *queue) Pop() []byte {
+	if q.first == nil {
+		return nil
+	}
 	b := make([]byte, len(q.first.item))
 	f := q.first
 	q.first = f.next
-	q.size -= len(q.first.item)
+	q.size -= len(f.item)
+	copy(b, f.item)
 
 	return b
 }
@@ -90,6 +95,7 @@ type logger struct {
 	input chan *data
 	out   chan chan []byte
 	stop  chan struct{}
+	once  sync.Once
 }
 
 type data struct {
@@ -97,18 +103,18 @@ type data struct {
 	err chan error
 }
 
-func (l logger) GetLog() []byte {
+func (l *logger) GetLog() []byte {
 	lc := make(chan []byte)
 	l.out <- lc
 	return <-lc
 }
 
-func (l logger) GetLogFileName() string {
+func (l *logger) GetLogFileName() string {
 	_, fn := path.Split(l.f.Name())
 	return fn
 }
 
-func (l logger) Log(b []byte) error {
+func (l *logger) Log(b []byte) error {
 	d := &data{
 		b:   b,
 		err: make(chan error),
@@ -118,11 +124,16 @@ func (l logger) Log(b []byte) error {
 	return <-d.err
 }
 
-func (l logger) Close() {
+func (l *logger) Close() {
+	l.once.Do(func() {
+		l.stop <- struct{}{}
+		<-l.stop
+		close(l.stop)
+	})
 	l.f.Close()
 }
 
-func (l logger) worker() {
+func (l *logger) worker() {
 	q := newQueue()
 	for {
 		select {
@@ -134,6 +145,7 @@ func (l logger) worker() {
 			q.Push(d.b)
 			d.err <- nil
 		case <-l.stop:
+			l.stop <- struct{}{}
 			return
 		case lc := <-l.out:
 			lc <- q.GetAll()
