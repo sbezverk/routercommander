@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"strconv"
+	"sync/atomic"
 
 	"regexp"
 	"strings"
@@ -274,7 +275,6 @@ func prepareLocations(r *router, cmd *Command) ([]string, error) {
 
 func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipeModifier string, commandTimeout int) ([]*CmdResult, error) {
 	results := make([]*CmdResult, 0)
-	locs := make([]string, 0)
 	var tmpl *template.Template
 	var err error
 	if cmd.LocationCustomized {
@@ -286,22 +286,22 @@ func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipe
 	for _, l := range locations {
 		switch l {
 		case "all":
-			locs = append(locs, r.GetAllLocations()...)
-			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			expanded := r.GetAllLocations()
+			rs, err := r.sendCommandWithLocations(cmd, expanded, pipeModifier, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
 			results = append(results, rs...)
 		case "all-rp":
-			locs = append(locs, r.GetAllRPs()...)
-			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			expanded := r.GetAllRPs()
+			rs, err := r.sendCommandWithLocations(cmd, expanded, pipeModifier, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
 			results = append(results, rs...)
 		case "all-lc":
-			locs = append(locs, r.GetAllLCs()...)
-			rs, err := r.sendCommandWithLocations(cmd, locs, pipeModifier, commandTimeout)
+			expanded := r.GetAllLCs()
+			rs, err := r.sendCommandWithLocations(cmd, expanded, pipeModifier, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
@@ -387,8 +387,12 @@ type router struct {
 }
 
 func (r *router) Close() {
-	r.session.Close()
-	r.sshClient.Close()
+	if r.session != nil {
+		r.session.Close()
+	}
+	if r.sshClient != nil {
+		r.sshClient.Close()
+	}
 }
 
 func (r *router) GetData(cmd string, debug bool, commandTimeout int) ([]byte, error) {
@@ -415,6 +419,11 @@ func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientCo
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial router: %s with error: %+v", r.name, err)
 	}
+	defer func() {
+		if err != nil {
+			r.sshClient.Close()
+		}
+	}()
 	r.session, err = r.sshClient.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
@@ -485,44 +494,39 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	defer func() {
 		timeout.Stop()
 	}()
-	// TODO (sbezverk)  consider buffer resizing logic
-	fullInput := make([]byte, 20480*10240)
-	index := 0
-	startFound := false
-	endFound := false
+	var fullInput bytes.Buffer
+	var startFound, endFound atomic.Bool
+	startFound.Store(false)
+	endFound.Store(false)
 	go func(done chan []byte, eCh chan error) {
 		lb := make([]byte, 1024)
 		cmdFound := false
 		for {
 			if n, err := stdout.Read(lb); err == nil {
-				copy(fullInput[index:index+n], lb)
-				index += n
+				fullInput.Write(lb[:n])
 				if !cmdFound {
-					ns := startPattern.FindIndex(fullInput[:index])
-					if ns != nil {
-						// glog.Infof("Command: %s found in buffer: %s", cmd, fullInput)
+					if ns := startPattern.FindIndex(fullInput.Bytes()); ns != nil {
+						// Discard everything before the command echo
+						fullInput.Next(ns[0])
 						cmdFound = true
-						startFound = true
-						copy(fullInput, fullInput[ns[0]:index])
-						index -= ns[0]
-						// glog.Infof("Buffer after trimming: %s", fullInput)
+						startFound.Store(true)
 					}
 				}
 				if !cmdFound {
 					continue
 				}
-				if findPromptIndex(fullInput[:index]) != nil {
-					if debug {
-						glog.Infof("completed router's reply with prompt: %s\n", string(fullInput[:index]))
-					}
-					endFound = true
-					done <- fullInput[:index]
+				if findPromptIndex(fullInput.Bytes()) != nil {
+					endFound.Store(true)
+					out := make([]byte, fullInput.Len())
+					copy(out, fullInput.Bytes())
+					done <- out
 					return
 				}
 			} else {
 				eCh <- err
 				return
 			}
+
 		}
 	}(doneCh, errCh)
 
@@ -568,8 +572,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		}
 		return b, nil
 	case <-timeout.C:
-		glog.Errorf("router's reply buffer full buffer: %s", string(fullInput))
-		return nil, fmt.Errorf("time out waiting for the result of %q, start found %t, end found %t", cmd, startFound, endFound)
+		return nil, fmt.Errorf("time out waiting for the result of %q, start found %t, end found %t", cmd, startFound.Load(), endFound.Load())
 	}
 }
 

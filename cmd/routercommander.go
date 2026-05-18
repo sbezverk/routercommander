@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/log"
@@ -35,9 +37,8 @@ var (
 	logLoc         string
 	knownHostsFile string
 	insecureSSH    bool
+	passwordStdin  bool
 )
-
-var wg sync.WaitGroup
 
 func init() {
 	flag.BoolVar(&local, "local", false, "when set to true, routercommander is running on the local router")
@@ -57,6 +58,7 @@ func init() {
 	flag.StringVar(&logLoc, "log", "", "path for the log file.")
 	flag.StringVar(&knownHostsFile, "known-hosts-file", "/tmp/routercommander_known_hosts", "path to the known hosts file for SSH")
 	flag.BoolVar(&insecureSSH, "insecure-ssh", false, "when set to true, SSH host key verification will be disabled and new host keys will not be added to the known hosts file")
+	flag.BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
 }
 
 type RouterInventory struct {
@@ -167,26 +169,32 @@ func main() {
 		glog.Infof("no commands file is specified, nothing to do, exiting...")
 		os.Exit(1)
 	}
+	if passwordStdin && pass != "" {
+		glog.Error("both --password and --password-stdin parameters cannot be provided simultaneously, exiting...")
+		os.Exit(1)
+	}
 	var n messenger.Notifier
 	routers := make([]string, 0)
 	var inventory *RouterInventory
 	var err error
 	var fatalErr error
+	var wg sync.WaitGroup
+
 	singleRouterCase := rtrName != ""
 	if !local {
 		switch {
 		case rtrName != "" && rtrFile == "":
 			// Case when only router's name if provided without inventory file
 			// this case requires both username and password to be provided
-			if login == "" || pass == "" {
-				glog.Error("--username and --password are mandatory parameters, when no inventory file is provided, exiting...")
+			if login == "" || (pass == "" && !passwordStdin) {
+				glog.Error("--username and --password or --password-stdin are mandatory parameters, when no inventory file is provided, exiting...")
 				os.Exit(1)
 			}
 			routers = append(routers, rtrName)
 		case rtrName != "" && rtrFile != "":
 			// Case when both router's name and inventory file are provided, inventory will be used to get more details abot a router
-			if pass == "" {
-				glog.Error("--password is a mandatory parameter, when routers' inventory file is provided, exiting...")
+			if pass == "" && !passwordStdin {
+				glog.Error("--password or --password-stdin is a mandatory parameter, when routers' inventory file is provided, exiting...")
 				os.Exit(1)
 			}
 			inventory, err = getRoutersInventory(rtrFile)
@@ -197,8 +205,8 @@ func main() {
 			routers = append(routers, rtrName)
 		case rtrName == "" && rtrFile != "":
 			// Case when only inventory file is provided, all routers from the inventory will be processed
-			if pass == "" {
-				glog.Error("--password is a mandatory parameter, when routers' inventory file is provided, exiting...")
+			if pass == "" && !passwordStdin {
+				glog.Error("--password or --password-stdin is a mandatory parameter, when routers' inventory file is provided, exiting...")
 				os.Exit(1)
 			}
 			inventory, err = getRoutersInventory(rtrFile)
@@ -268,6 +276,15 @@ func main() {
 		errCh <- process(r, commands, n)
 	}
 
+	if passwordStdin {
+		var pw string
+		pw, err = readPasswordFromStdin(5 * time.Second)
+		if err != nil {
+			glog.Errorf("failed to read password from stdin with error: %+v, exiting...", err)
+			os.Exit(1)
+		}
+		pass = pw
+	}
 	processesStarted := 0
 	for _, router := range routers {
 		actRouter := router
@@ -329,20 +346,48 @@ func main() {
 		}
 		processesStarted++
 	}
-	if fatalErr == nil {
-		wg.Wait()
-		for i := 0; i < processesStarted; i++ {
-			err := <-errCh
-			if err != nil {
-				glog.Errorf("processing finished with error: %+v", err)
-				os.Exit(1)
-			}
+	pass = ""
+	for i := 0; i < processesStarted; i++ {
+		err := <-errCh
+		if err != nil {
+			glog.Errorf("processing finished with error: %+v", err)
 		}
 	}
+	wg.Wait()
 	close(errCh)
 	glog.Infof("all processes have finished, exiting...")
 	if fatalErr == nil {
 		os.Exit(0)
 	}
 	os.Exit(1)
+}
+
+func readPasswordFromStdin(timeout time.Duration) (string, error) {
+	type result struct {
+		password string
+		err      error
+	}
+
+	ch := make(chan result, 1)
+
+	go func() {
+		s, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil {
+			ch <- result{"", err}
+			return
+		}
+		pw := strings.TrimRight(s, "\r\n")
+		if pw == "" {
+			ch <- result{"", fmt.Errorf("no password received on stdin")}
+			return
+		}
+		ch <- result{pw, nil}
+	}()
+
+	select {
+	case r := <-ch:
+		return r.password, r.err
+	case <-time.After(timeout):
+		return "", fmt.Errorf("timed out waiting for password on stdin")
+	}
 }

@@ -95,7 +95,7 @@ func NewVerifier(knownHostsFile string, isInsecure bool) (Verifier, error) {
 	}
 	v.insecure = isInsecure
 	var err error
-	v.f, err = os.OpenFile(knownHostsFile, os.O_RDWR|os.O_CREATE, 0644)
+	v.f, err = os.OpenFile(knownHostsFile, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open known hosts file %s with error: %+v", knownHostsFile, err)
 	}

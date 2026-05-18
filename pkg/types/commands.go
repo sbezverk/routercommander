@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 
@@ -14,12 +15,8 @@ func readCommandFile(fn string) ([]byte, error) {
 		return nil, fmt.Errorf("fail to open file %s with error: %+v", fn, err)
 	}
 	defer f.Close()
-	l, err := os.Stat(fn)
+	b, err := io.ReadAll(f)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get stats for file %s with error: %+v", fn, err)
-	}
-	b := make([]byte, l.Size())
-	if _, err := f.Read(b); err != nil {
 		return nil, fmt.Errorf("fail to read file %s with error: %+v", fn, err)
 	}
 	return b, nil
