@@ -429,7 +429,7 @@ func NewRouter(rn string, port int, platformType string, sshConfig *ssh.ClientCo
 		return nil, fmt.Errorf("failed to establish a session with error: %+v", err)
 	}
 	glog.Infof("Successfully dialed router: %s", rn)
-	if err := r.session.RequestPty("vt100", 256, 40, ssh.TerminalModes{
+	if err = r.session.RequestPty("vt100", 256, 40, ssh.TerminalModes{
 		ssh.ECHO:          0,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
