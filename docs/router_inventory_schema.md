@@ -23,6 +23,9 @@ Example:
 
 ```yaml
 routers:
+  drctam51:
+    platform: iosxr
+
   r1:
     address: vxr-slurm-307
     port: 24965
@@ -53,8 +56,9 @@ routers: <map[string]RouterTarget>
 `RouterTarget` fields:
 
 - `address`
-  - required
-  - DNS name or IP to connect to
+  - optional
+  - DNS name or IP to connect to when it differs from the router label
+  - defaults to the normalized router label
 - `port`
   - optional
   - SSH port
@@ -116,7 +120,7 @@ Behavior:
 
 - normalize `--router-name`
 - find matching entry under `routers`
-- connect to the resolved `address`
+- connect to the resolved `address`, or to the normalized router label when `address` is omitted
 - use inventory `port` if present, otherwise `22`
 - use inventory `username` if present, otherwise CLI `--username`
 

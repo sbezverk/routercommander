@@ -23,6 +23,35 @@ func simulateRouter(t *testing.T, stdinR io.Reader, stdoutW io.WriteCloser, outp
 	}()
 }
 
+type discardWriteCloser struct{}
+
+func (discardWriteCloser) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func (discardWriteCloser) Close() error {
+	return nil
+}
+
+type chunkReader struct {
+	chunks [][]byte
+}
+
+func (r *chunkReader) Read(p []byte) (int, error) {
+	if len(r.chunks) == 0 {
+		return 0, io.EOF
+	}
+	chunk := r.chunks[0]
+	if len(chunk) > len(p) {
+		copy(p, chunk[:len(p)])
+		r.chunks[0] = chunk[len(p):]
+		return len(p), nil
+	}
+	copy(p, chunk)
+	r.chunks = r.chunks[1:]
+	return len(chunk), nil
+}
+
 func TestSendCommand_NormalOutput(t *testing.T) {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
@@ -56,6 +85,29 @@ func TestSendCommand_LargeOutput(t *testing.T) {
 	}
 	if !strings.Contains(string(result), "10.0.0.0/24") {
 		t.Fatal("large output not fully received")
+	}
+}
+
+func TestSendCommand_DetectsPromptSplitAcrossReads(t *testing.T) {
+	large := strings.Repeat("10.0.0.0/24 via 192.168.1.1\n", 10_000)
+	stdout := &chunkReader{
+		chunks: [][]byte{
+			[]byte("show version\nCisco IOS XR\n" + large),
+			[]byte("RP/0/RSP0/CPU"),
+			[]byte("0:router#\n"),
+		},
+	}
+
+	result, err := sendCommand(discardWriteCloser{}, stdout, "show version", false, nil, 10)
+	if err != nil {
+		t.Fatalf("sendCommand returned unexpected error: %v", err)
+	}
+	got := string(result)
+	if !strings.Contains(got, "Cisco IOS XR") {
+		t.Fatalf("expected command output in result, got: %q", got)
+	}
+	if strings.Count(got, "10.0.0.0/24 via 192.168.1.1") != 10_000 {
+		t.Fatalf("large output was not preserved exactly")
 	}
 }
 
