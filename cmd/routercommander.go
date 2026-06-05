@@ -170,7 +170,7 @@ func getRoutersInventory(fileName string) (*RouterInventory, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.5.0           |
+    | routercommander                  v0.5.1           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+
