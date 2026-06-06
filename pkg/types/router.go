@@ -191,7 +191,9 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.PipeModifier != "" {
 		pipeModifier += " | " + cmd.PipeModifier
 	}
-	glog.Infof("\tprocessing command %q with timeout %d seconds", c+pipeModifier, commandTimeout)
+	if cmd.Debug {
+		glog.Infof("\tprocessing command %q with timeout %d seconds", c+pipeModifier, commandTimeout)
+	}
 	if len(cmd.Location) == 0 {
 		var err error
 		rs, err := r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
@@ -516,10 +518,12 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 				end := tailLen + n
 				scan := lb[:end]
 				writeStart := tailLen
+				promptScanStart := 0
 				if !cmdFound {
 					if ns := startPattern.FindIndex(scan); ns != nil {
 						// Discard everything before the command echo
 						writeStart = ns[0]
+						promptScanStart = writeStart
 						cmdFound = true
 						startFound.Store(true)
 					}
@@ -537,7 +541,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 					continue
 				}
 				fullInput.Write(scan[writeStart:end])
-				if findPromptIndex(scan) != nil {
+				if findPromptIndex(scan[promptScanStart:end]) != nil {
 					endFound.Store(true)
 					out := make([]byte, fullInput.Len())
 					copy(out, fullInput.Bytes())
@@ -600,7 +604,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		}
 		return b, nil
 	case <-timeout.C:
-		return nil, fmt.Errorf("%d seconds has expired, time out waiting for the result of %q, start found %t, end found %t", commandTimeout, cmd, startFound.Load(), endFound.Load())
+		return nil, fmt.Errorf("%d seconds have expired; timeout waiting for the result of %q, start found %t, end found %t", commandTimeout, cmd, startFound.Load(), endFound.Load())
 	}
 }
 

@@ -111,6 +111,24 @@ func TestSendCommand_DetectsPromptSplitAcrossReads(t *testing.T) {
 	}
 }
 
+func TestSendCommand_IgnoresPromptBeforeCommandEcho(t *testing.T) {
+	stdout := &chunkReader{
+		chunks: [][]byte{
+			[]byte("RP/0/RSP0/CPU0:router#\nshow version\nCisco IOS XR\npartial output\n"),
+			[]byte("final output\nRP/0/RSP0/CPU0:router#\n"),
+		},
+	}
+
+	result, err := sendCommand(discardWriteCloser{}, stdout, "show version", false, nil, 10)
+	if err != nil {
+		t.Fatalf("sendCommand returned unexpected error: %v", err)
+	}
+	got := string(result)
+	if !strings.Contains(got, "partial output") || !strings.Contains(got, "final output") {
+		t.Fatalf("expected complete command output, got: %q", got)
+	}
+}
+
 func TestSendCommand_Timeout(t *testing.T) {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
