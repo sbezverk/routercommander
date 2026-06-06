@@ -150,7 +150,7 @@ func TestSendCommand_Timeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a timeout error, got nil")
 	}
-	if !strings.Contains(err.Error(), "time out") {
+	if !strings.Contains(err.Error(), "timeout") {
 		t.Fatalf("expected timeout error, got: %v", err)
 	}
 	// Allow the goroutine inside sendCommand time to unblock after stdoutW closes.
