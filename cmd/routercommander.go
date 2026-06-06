@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -58,7 +59,7 @@ func init() {
 	flag.StringVar(&smtpFrom, "smtp-from", "", "email address to use for sending the report from")
 	flag.StringVar(&smtpTo, "smtp-to", "", "comma separated list of emails for sending the report to")
 	flag.StringVar(&logLoc, "log", "", "path for the log file.")
-	flag.StringVar(&knownHostsFile, "known-hosts-file", "/tmp/routercommander_known_hosts", "path to the known hosts file for SSH")
+	flag.StringVar(&knownHostsFile, "known-hosts-file", defaultKnownHostsFile(), "path to the known hosts file for SSH")
 	flag.BoolVar(&insecureSSH, "insecure-ssh", false, "when set to true, SSH host key verification will be disabled and new host keys will not be added to the known hosts file")
 	flag.BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
 }
@@ -86,6 +87,10 @@ func normalizeRouterName(name string) string {
 	return strings.Trim(strings.ToLower(strings.TrimSpace(name)), "\n\t,")
 }
 
+func defaultKnownHostsFile() string {
+	return filepath.Join(os.TempDir(), "routercommander_known_hosts")
+}
+
 func resolveRouterTarget(name string, inventory *RouterInventory, defaultPort int, defaultUser string) (*ResolvedTarget, error) {
 	normalized := normalizeRouterName(name)
 	if inventory == nil {
@@ -99,21 +104,27 @@ func resolveRouterTarget(name string, inventory *RouterInventory, defaultPort in
 		glog.Warningf("router %s is not found in the inventory, using specified router name as an address to connect to", normalized)
 		return nil, nil
 	}
-	if target.Address == "" {
-		return nil, fmt.Errorf("address for router %s is not specified in the inventory", name)
+	if target == nil {
+		target = &RouterTarget{}
 	}
-	if target.Port == 0 {
-		target.Port = defaultPort
+	address := strings.TrimSpace(target.Address)
+	if address == "" {
+		address = normalized
 	}
-	if target.Username == "" {
-		target.Username = defaultUser
+	port := target.Port
+	if port == 0 {
+		port = defaultPort
+	}
+	username := strings.TrimSpace(target.Username)
+	if username == "" {
+		username = defaultUser
 	}
 	return &ResolvedTarget{
 		Name:     normalized,
-		Address:  target.Address,
-		Port:     target.Port,
+		Address:  address,
+		Port:     port,
 		Platform: target.Platform,
-		Username: target.Username,
+		Username: username,
 	}, nil
 }
 
@@ -140,10 +151,14 @@ func getRoutersInventory(fileName string) (*RouterInventory, error) {
 			glog.Warningf("router with empty name is found in the inventory file %s, skipping...", fileName)
 			continue
 		}
-		if target.Address == "" {
-			glog.Warningf("router %s has empty address in the inventory file %s, skipping...", name, fileName)
-			continue
+		if target == nil {
+			target = &RouterTarget{}
 		}
+		target.Address = strings.TrimSpace(target.Address)
+		if target.Address == "" {
+			target.Address = normName
+		}
+		target.Username = strings.TrimSpace(target.Username)
 		if target.Port == 0 {
 			target.Port = 22
 		}
@@ -156,7 +171,7 @@ func getRoutersInventory(fileName string) (*RouterInventory, error) {
 func main() {
 	logo := `
     +---------------------------------------------------+
-    | routercommander                  v0.5.0           |
+    | routercommander                  v0.5.1           |
     | Developed and maintained by Serguei Bezverkhi     |
     | sbezverk@cisco.com                                |
     +---------------------------------------------------+

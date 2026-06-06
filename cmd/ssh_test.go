@@ -81,6 +81,17 @@ func TestNormalizeKnownHost(t *testing.T) {
 	}
 }
 
+func TestDefaultKnownHostsFileUsesOSTempDir(t *testing.T) {
+	got := defaultKnownHostsFile()
+
+	if filepath.Base(got) != "routercommander_known_hosts" {
+		t.Fatalf("default known hosts file base = %q, want %q", filepath.Base(got), "routercommander_known_hosts")
+	}
+	if filepath.Clean(filepath.Dir(got)) != filepath.Clean(os.TempDir()) {
+		t.Fatalf("default known hosts file dir = %q, want OS temp dir %q", filepath.Dir(got), os.TempDir())
+	}
+}
+
 func TestRemoteHostKeyCallbackTOFUAndMismatch(t *testing.T) {
 	tmpDir := t.TempDir()
 	khFile := filepath.Join(tmpDir, "known_hosts")

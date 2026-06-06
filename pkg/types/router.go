@@ -191,6 +191,9 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	if cmd.PipeModifier != "" {
 		pipeModifier += " | " + cmd.PipeModifier
 	}
+	if cmd.Debug {
+		glog.Infof("\tprocessing command %q with timeout %d seconds", c+pipeModifier, commandTimeout)
+	}
 	if len(cmd.Location) == 0 {
 		var err error
 		rs, err := r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
@@ -503,30 +506,55 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 	startFound.Store(false)
 	endFound.Store(false)
 	go func(done chan []byte, eCh chan error) {
-		lb := make([]byte, 1024)
+		const readBufferSize = 256 * 1024
+		const promptWindowSize = 256
+
+		lb := make([]byte, readBufferSize+promptWindowSize)
 		cmdFound := false
+		tailLen := 0
 		for {
-			if n, err := stdout.Read(lb); err == nil {
-				fullInput.Write(lb[:n])
+			n, err := stdout.Read(lb[tailLen:])
+			if n > 0 {
+				end := tailLen + n
+				scan := lb[:end]
+				writeStart := tailLen
+				promptScanStart := 0
 				if !cmdFound {
-					if ns := startPattern.FindIndex(fullInput.Bytes()); ns != nil {
+					if ns := startPattern.FindIndex(scan); ns != nil {
 						// Discard everything before the command echo
-						fullInput.Next(ns[0])
+						writeStart = ns[0]
+						promptScanStart = writeStart
 						cmdFound = true
 						startFound.Store(true)
 					}
 				}
 				if !cmdFound {
+					tailLen = end
+					if tailLen > promptWindowSize {
+						tailLen = promptWindowSize
+					}
+					copy(lb[:tailLen], scan[end-tailLen:end])
+					if err != nil {
+						eCh <- err
+						return
+					}
 					continue
 				}
-				if findPromptIndex(fullInput.Bytes()) != nil {
+				fullInput.Write(scan[writeStart:end])
+				if findPromptIndex(scan[promptScanStart:end]) != nil {
 					endFound.Store(true)
 					out := make([]byte, fullInput.Len())
 					copy(out, fullInput.Bytes())
 					done <- out
 					return
 				}
-			} else {
+				tailLen = end
+				if tailLen > promptWindowSize {
+					tailLen = promptWindowSize
+				}
+				copy(lb[:tailLen], scan[end-tailLen:end])
+			}
+			if err != nil {
 				eCh <- err
 				return
 			}
@@ -576,7 +604,7 @@ func sendCommand(stdin io.WriteCloser, stdout io.Reader, cmd string, debug bool,
 		}
 		return b, nil
 	case <-timeout.C:
-		return nil, fmt.Errorf("time out waiting for the result of %q, start found %t, end found %t", cmd, startFound.Load(), endFound.Load())
+		return nil, fmt.Errorf("%d seconds have expired; timeout waiting for the result of %q, start found %t, end found %t", commandTimeout, cmd, startFound.Load(), endFound.Load())
 	}
 }
 
