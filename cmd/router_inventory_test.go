@@ -79,6 +79,16 @@ func TestResolveRouterTargetDefaultsAddressToRouterNameAndUsername(t *testing.T)
 	if target.Username != "cisco" {
 		t.Fatalf("username = %q, want %q", target.Username, "cisco")
 	}
+	if inventory.Routers["drctam51"].Port != 0 {
+		t.Fatalf("inventory port was mutated to %d, want 0", inventory.Routers["drctam51"].Port)
+	}
+	target, err = resolveRouterTarget("DRCTAM51", inventory, 2022, "cisco")
+	if err != nil {
+		t.Fatalf("failed to resolve router target: %v", err)
+	}
+	if target.Port != 2022 {
+		t.Fatalf("port = %d, want %d", target.Port, 2022)
+	}
 
 	target, err = resolveRouterTarget("DRCTAM52", inventory, 2222, "cisco")
 	if err != nil {

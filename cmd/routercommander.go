@@ -111,8 +111,9 @@ func resolveRouterTarget(name string, inventory *RouterInventory, defaultPort in
 	if address == "" {
 		address = normalized
 	}
-	if target.Port == 0 {
-		target.Port = defaultPort
+	port := target.Port
+	if port == 0 {
+		port = defaultPort
 	}
 	username := strings.TrimSpace(target.Username)
 	if username == "" {
@@ -121,7 +122,7 @@ func resolveRouterTarget(name string, inventory *RouterInventory, defaultPort in
 	return &ResolvedTarget{
 		Name:     normalized,
 		Address:  address,
-		Port:     target.Port,
+		Port:     port,
 		Platform: target.Platform,
 		Username: username,
 	}, nil
