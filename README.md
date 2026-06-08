@@ -2,13 +2,19 @@
 
 ## Overview
 
-**routercommander** is the tool developed to automate the process of reproducing issues and the collection a large number of commands from a router or a series of routers. As in example of a taking router's health check, the health check might require to run more than 50 commands, doing it one by one is pure insanity, as it will consume significant time; copy and pasting all commands and pray that there is no any syntax error or pasted commands will be correctly accepted by a router is no better option. **routercommander** will execute each command, collect the output and stored it in the file with a router name and the time stamp as a file name. In addition, **routercommander** allows to extend a bit the collection process by introducing several controlling parameters. For example some commands might need to be executed several time and with a specific time interval between them. Some commands might have a required *location* keyword some not. All these particularities can be controlled from the commands YAML file. Please see below a sample of such file for **show cef drop** command.
+`routercommander` automates command collection from one router or from a router inventory. It runs commands over SSH, writes a timestamped log per router, and can optionally process command output against regex patterns and structured tests.
+
+The command profile is described in YAML. A minimal collect profile looks like this:
 
 ```yaml
+collect:
+  process_result: true
+
 commands:
   - command: show cef drops
-    times: 2
-    interval: 10
+    command_timeout: 30
+    times: 1
+    interval: 1
     location:
       - "0/0/CPU0"
       - "0/1/CPU0"
@@ -18,131 +24,119 @@ commands:
     debug: false
 ```
 
-As it is clearly seen, this file defines **show cef drops** command.  It also defines a number of times  to execute it **2** as well as a time interval between in seconds **10**. It also instructs **routercommander** to run it only against locations 0/0/CPU0, 0/1/CPU0 and 0/2/CPU0.
+In collect mode, `collect.process_result` controls whether command output is checked against configured `patterns` and `tests`. If it is false or omitted, command output is still collected but pattern/test processing is skipped unless a command sets `process_result: true`.
 
-the **pattern** keyword defines a pattern to detect an *alarming condition*, it is a part of a health check automation functionality which is still under the development.
+## YAML Model
 
-## Command customization parameters
-
-```yaml
-commands:
-   - command:     < ----- defines a command to execute
-     times:          < ----- defines number of times to execute this command,
-                           make sense only in collect mode
-     interval:       < ----- defines the interval in seconds between execution
-                           of the command, make sense only in collect mode
-     wait_before: number of seconds
-     wait_after:  number of seconds 
-     location:       < ----- defines a list of locations to execute the command
-       - "0/0/CPU0"
-     debug:          < ----- boolean true/false, used for debugging of
-                             the execution of the command
-     process_result: < ----- boolean true/false, by default in "collect" mode
-                             results of commands are not processed, used to
-                             override global value
-     patterns:
-        - pattern_string: < ----- defines a string representation of
-                                  a regular expression to match
-          capture:          < ----- if defined, used to capture a specific value
-                                    and then compare between repro mode iterations
-            field_number: [2,4] < ----- in the string matched by pattern_string,
-                                    list of fields to capture
-            separator: ":"  < ----- defines character ":" as a separator to use
-                                    with the matched string to get field number 2 and 4 for example.
-```
-
-If only **pattern_string** tag present, without **capture**, then it will be treated just as a matching condition in the health check validation of **collect** mode, when both present, then they will be used to detect a value change between iterations of **repro** mode.
-
-## 2 modes of routercommander operations "collect" and "repro"
-
-**routercommander** can operate in two modes, ***collect*** and ***repro***. If **repro** section is present in the yaml file, **routercommander**  will switch to **repro** mode regardless if **collect** section also present.
-
-### collect
-
-In **collect** mode **routercommander** just collect the information based on the list of commands. All commands customization parameters listed above are available in **collect** mode. Some of them though, do not make sense as **Capture** section, which requires the presence of **repro** section. In **collect** section, health check (matching patterns of a command) can be globally enabled, by default it is disabled.
+The active command YAML model uses these top-level sections:
 
 ```yaml
 collect:
-   health_check:  < ----- boolean true/false
-```
+  stop_on_error: false
+  process_result: true
 
-### repro
-
-**repro** mode sets parameters of execution of a group of commands defined by **commands** section. It also defines a list of “post-mortem” commands to collect if the issue is triggered. Please see the example below:
-
-```yaml
 repro:
-  times: 8640
-  interval: 10
-    command_processing_rules:
-    #
-    # command tag must match to one of the command tag from the commands section, under
-    # this tag the special instructions for its processing are listed.
-    - command: "run netstat -s -udp"
-      patterns:
-        #
-        # the value of the pattern_string must match to one of the patterns defined for the command in the commands section.
-        # If the pattern_string below had the capture tag in the commands section, then the captured
-        # values would be available for the command mutation.
-        - pattern_string: 'SndbufErrors:\s*[0-9+]'
-          captured_values:
-            - field_number: 2
-              operation: "compare_with_previous_neq"
-          pattern_commands:
-            - command: "run netstat -aup | grep tcp"
-  postmortem_command_group:
-    - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
+  times: 10
+  interval: 5
+  stop_when_triggered: true
+  if_triggered_commands:
+    - command: show tech-support
+      command_timeout: 300
+
+tests:
+  - command: show cef drops
+    command_tests:
+      - id: 1
+        pattern:
+          pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
+        fields:
+          - field_number: 1
+            operation: compare_with_value_neq
+            value: "0"
+        separator: " "
+
 commands:
-  - command: "run netstat -s -udp"
-    collect_result: true
+  - command: show cef drops
+    process_result: true
+    command_test_ids: [1]
     patterns:
-      - pattern_string: 'SndbufErrors:\s*[0-9+]'
-        capture:
-          field_number: [2]
-          separator: ":"
-    debug: false
+      - pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
 ```
 
-In this example, commands defined by **commands:** tag, will be executed 8640 times with the interval of 10 seconds.  The repro is considered as triggered when the value of field 2 is changed between repro iterations. In this case commands defined by **postmortem_commands** tag will be executed.
+Common command fields:
 
-Please see this [link](/testdata/commands_v2.md) for more detailed description of YAML file structure and parameters.
+- `command`: command to execute.
+- `command_timeout`: command timeout in seconds.
+- `times` and `interval`: repeat a command and delay between repeats.
+- `wait_before` and `wait_after`: delay around the command execution.
+- `location`: list of locations to append to the command.
+- `location_fmt_tmpl`: template used to format locations.
+- `location_customized`: command contains `{{.Location}}` where the location should be inserted.
+- `pipe_modifier`: pipe modifier appended to the command.
+- `debug`: enables command-level debug behavior.
+- `process_result`: enables result processing for this command.
+- `patterns`: regexes used to record matching output lines.
+- `command_test_ids`: restricts which tests run for this command. If omitted, all tests for the command run.
 
-## To run
+Structured test operations currently supported by `fields[].operation` are:
 
-### as a linux binary
+- `compare_with_previous_neq`
+- `compare_with_previous_eq`
+- `compare_with_value_neq`
+- `compare_with_value_eq`
+- `contain_substring`
+- `not_contain_substring`
 
-**routercommander** leverages the most ubiquitous access method used by network operators, ssh access. The mandatory parameters to run **routercommander** are:
+See [testdata/commands_v2.md](testdata/commands_v2.md) for a fuller schema reference.
 
-- **--username** defines a user name to use to ssh to a router
-- **--password** defines a password to use for ssh authentication
-- **--command-file** defines the location of the commands YAML file
+## Modes
 
-**routercommander** can execute the list of commands against a single router, for this case **--router-name** parameter should be used, or in a concurrent manner against a group of routers, the names of routers are stored in a normal text file:
+### Collect
 
-```text
-router1
-router2
-router3
-router4
-```
+In collect mode, `routercommander` runs the commands once unless a command sets `times`. It collects output for every command. Pattern and test evaluation runs only when `collect.process_result` or the command's `process_result` is true.
 
-and **--routers-file** parameter defines its location.
+### Repro
+
+If the YAML has a `repro` section, `routercommander` runs in repro mode. The main `commands` list is executed `repro.times` times, with `repro.interval` seconds between iterations.
+
+Repro mode always processes command output. A repro trigger is produced by a matching `tests.command_tests` entry. When a test triggers, its own `if_triggered_commands` run first. If any test triggers, the global `repro.if_triggered_commands` run after the main command group. If `repro.stop_when_triggered` is true, repro stops after the first triggered iteration.
+
+## To Run
+
+`routercommander` uses SSH to connect to routers. The required flags for a direct single-router run are:
+
+- `--username`: SSH username.
+- `--password` or `--password-stdin`: SSH password.
+- `--router-name`: router name or address.
+- `--commands-file`: command profile YAML.
+
+Example:
 
 ```bash
-routercommander --username=root --password=1234567 --router-name=router1 --command-file=./show_fib.yaml
+routercommander --username=root --password=1234567 --router-name=router1 --commands-file=./show_fib.yaml
 ```
 
-the result of the routercommander execution will be a log file, named with router's name as a prefix and the timestamp of execution as suffix. The log file will container the output generated by the show command.
+To run against multiple routers, pass `--routers-file` with a router inventory YAML. See [docs/router_inventory_schema.md](docs/router_inventory_schema.md) for the inventory format.
 
-### as a docker container
+Useful batch-control flags:
 
-Running **routercommander** as a container adds a small twist. Since we are passing 1 external file, the list of commands and expecting the container to create a log file on the external file system, we need to mount or map to the container  these two locations. It will become more clear after reviewing the example. All other parameters are exactly the same.
+- `--max-concurrent-sessions`: maximum concurrent SSH sessions. Default is `10`.
+- `--sessions-start-interval-ms`: delay between starting sessions. Default is `500`.
+
+## Docker
+
+When running as a container, mount a directory for logs and a directory containing the command YAML:
 
 ```bash
-docker run --net=host -v /home/some-user/logs:/logs -v /home/nso:/testdata docker.io/sbezverk/routercommander:latest --router-name=router --username=user --password='pass' --v=5 --commands-file=./testdata/show_cef.yaml 
+docker run --net=host \
+  -v /home/some-user/logs:/logs \
+  -v /home/some-user/testdata:/testdata \
+  docker.io/sbezverk/routercommander:latest \
+  --router-name=router \
+  --username=user \
+  --password='pass' \
+  --v=5 \
+  --commands-file=./testdata/show_cef.yaml
 ```
 
-First volume we mount or map into the container is for the resulting log file, **-v /home/some-user/logs:/logs** this directive maps physical location **/home/some-user/logs** to the container's internal folder **/logs**,
-second volume we map **-v /home/some-user/testdata:/testdata** to give the container access to the commands yaml file.
-
-The resulting log file will be stored in **/home/some-user/logs** folder.
+The resulting log file is written under the mounted `/logs` directory.

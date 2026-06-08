@@ -1,15 +1,12 @@
 #
-# In collect mode, routercommander collects the output of commands defined under commands tag
-# if commands do not have patterns to look for a specific text in the output or matching against patterns
-# is not required, health_check should be set to false.
+# In collect mode, process_result controls whether command output is checked
+# against configured patterns and tests.
 collect:
-  health_check: false
+  process_result: false
 #
 # In repro mode, the commands defined under the commands tag are  used to trigger and detect
-# a specific issue. In most common case, after the issue is triggered, commands defined by
-# postmortem_command_group is collected.
-# command_processing_rules is optional and considered an advanced feature which allow further
-# customization of the commands to execute as a part of the postmortem.
+# a specific issue. If the issue is triggered, commands defined by
+# if_triggered_commands can be collected.
 repro:
   #
   # times defines a number of iterations commands is executed.

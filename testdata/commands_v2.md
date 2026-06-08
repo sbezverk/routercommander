@@ -1,77 +1,201 @@
-## Data model v2
+## Command YAML Model
 
-The following file describes the data model and available parameters for routercommanderv2.
+This document describes the current command profile schema used by `routercommander`.
+
+## Top-Level Sections
 
 ```yaml
-
-#
-# In collect mode, routercommander collects the output of commands defined under commands tag
-# if commands do not have patterns to look for a specific text in the output or matching against patterns
-# is not required, health_check should be set to false.
 collect:
-  health_check: false
-#
-# In repro mode, the commands defined under the commands tag are  used to trigger and detect
-# a specific issue. In most common case, after the issue is triggered, commands defined by
-# postmortem_command_group is collected.
-# command_processing_rules is optional and considered an advanced feature which allow further
-# customization of the commands to execute as a part of the postmortem.
-repro:
-  #
-  # times defines a number of iterations commands is executed.
-  times: 2
-  #
-  # interval defines an interval between iterations.
-  interval: 10
-  #
-  # command_processing_rules optional and advanced feature,
-  # defines special processing rules for a command which triggered the match.
-  # Optional if no special processing is needed.
-  command_processing_rules:
-    #
-    # command tag must match to one of the command tag from the commands section, under
-    # this tag the special instructions for its processing are listed.
-    - command: "run netstat -s -udp"
-      patterns:
-        #
-        # the value of the pattern_string must match to one of the patterns defined for the command in the commands section.
-        # If the pattern_string below had the capture tag in the commands section, then the captured
-        # values would be available for the command mutation.
-        - pattern_string: 'InMcastPkts:\s*[0-9+]'
-          captured_values:
-            - field_number: 2
-              #
-              # Defines operations to undertake on the captured value of the specific field.
-              # compare_with_previous_eq
-              # compare_with_previous_neq
-              # compare_with_value_eq
-              # compare_with_value_neq
-              operation: "compare_with_previous_neq"
-              # value:
-          pattern_commands:
-            - command: "run netstat -aup | grep tcp"
-          # Defines if all operations must return true or not to consider
-          check_all_results: true
-  #
-  # Defines a list of global post mortem commands which will be executed
-  # regardless which command and pattern triggered the match.
-  postmortem_command_group:
-    - command: 'run for i in {1..20}; do date +"%T. %3N"; netstat -s -udp | grep SndbufErrors; netstat -aup | grep tcp; sleep 0.2; done'
-#
-# Defines a command group used  to either collect information as in case of collect mode,
-# or to reproduce an issue as in case of repro mode.
-commands:
-  - command: "run netstat -s -udp"
-    process_result: true
-    patterns:
-      - pattern_string: 'InMcastPkts:\s*[0-9+]'
-        capture:
-          # Defines an array of fields to capture from a string matched by the pattern
-          field_number: [2]
-          # Defines a separator character used on the matched line to separate fields
-          separator: ":"
-          # In case there are multiple matches, occurrence allow to select which occurence to use to capture field(s)
-          occurrence: 1
-    debug: false
+  stop_on_error: false
+  process_result: true
 
+repro:
+  times: 10
+  interval: 5
+  stop_when_triggered: true
+  if_triggered_commands:
+    - command: show tech-support
+      command_timeout: 300
+
+tests:
+  - command: show cef drops
+    command_tests:
+      - id: 1
+        pattern:
+          pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
+        separator: " "
+        fields:
+          - field_number: 1
+            operation: compare_with_value_neq
+            value: "0"
+        if_triggered_commands:
+          - command: show logging last 50
+        check_all_results: false
+
+commands:
+  - command: show cef drops
+    process_result: true
+    command_test_ids: [1]
+    patterns:
+      - pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
+```
+
+Supported top-level keys:
+
+- `collect`: collect-mode behavior.
+- `repro`: repro-mode iteration and global triggered commands.
+- `tests`: structured checks keyed by command.
+- `commands`: main command list.
+
+## collect
+
+```yaml
+collect:
+  stop_on_error: false
+  process_result: true
+```
+
+Fields:
+
+- `stop_on_error`: when true, a batch run stops after a router fails.
+- `process_result`: when true, command output is checked against configured patterns and tests in collect mode.
+
+## repro
+
+```yaml
+repro:
+  times: 100
+  interval: 10
+  stop_when_triggered: true
+  if_triggered_commands:
+    - command: show tech-support
+      command_timeout: 300
+```
+
+Fields:
+
+- `times`: number of main command-group iterations.
+- `interval`: seconds between iterations.
+- `stop_when_triggered`: stop repro after the first triggered iteration.
+- `if_triggered_commands`: global commands collected after any test triggers.
+
+When `repro` is present, command output is processed regardless of `collect.process_result`.
+
+## commands
+
+```yaml
+commands:
+  - command: show cef drops
+    command_timeout: 30
+    times: 2
+    interval: 10
+    wait_before: 1
+    wait_after: 1
+    location:
+      - "0/0/CPU0"
+    location_fmt_tmpl: "{{.Location}}"
+    location_customized: false
+    pipe_modifier: include drops
+    debug: false
+    process_result: true
+    command_test_ids: [1]
+    patterns:
+      - pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
+```
+
+Fields:
+
+- `command`: command text to execute.
+- `command_timeout`: timeout in seconds.
+- `times`: number of times this command is executed.
+- `interval`: seconds between command repeats.
+- `wait_before`: seconds to wait before executing the command.
+- `wait_after`: seconds to wait after executing the command.
+- `location`: locations used with location-aware commands.
+- `location_fmt_tmpl`: template for formatting each location.
+- `location_customized`: when true, `{{.Location}}` in `command` is replaced with each location.
+- `pipe_modifier`: pipe text appended to the command.
+- `debug`: command-level debug flag.
+- `process_result`: process this command's output even when collect-level processing is disabled.
+- `patterns`: regex list used to record matching output lines.
+- `command_test_ids`: test IDs to execute for this command. If omitted, all tests for the command execute.
+
+## tests
+
+```yaml
+tests:
+  - command: show cef drops
+    command_tests:
+      - id: 1
+        pattern:
+          pattern_string: 'drops\s+packets\s+:\s+[1-9]\d*'
+        occurrence: 1
+        number_of_occurrences: 1
+        separator: " "
+        fields:
+          - field_number: 1
+            operation: compare_with_value_neq
+            value: "0"
+        if_triggered_commands:
+          - command: show logging last 50
+        check_all_results: false
+```
+
+Fields:
+
+- `command`: command text this test group applies to. It must match a `commands[].command` value.
+- `command_tests`: list of tests for the command.
+- `id`: test identifier referenced by `command_test_ids`.
+- `pattern.pattern_string`: regex used to find matching output.
+- `occurrence`: optional one-based match occurrence to check.
+- `number_of_occurrences`: expected number of regex matches. A mismatch triggers the test.
+- `separator`: character set used to split the matched line for field extraction. Defaults to whitespace.
+- `fields`: checks to run against extracted fields.
+- `if_triggered_commands`: commands executed immediately when this test triggers.
+- `check_all_results`: when true, all configured field checks must trigger.
+
+Field operations:
+
+- `compare_with_previous_neq`
+- `compare_with_previous_eq`
+- `compare_with_value_neq`
+- `compare_with_value_eq`
+- `contain_substring`
+- `not_contain_substring`
+
+## Simple Collect Example
+
+```yaml
+collect:
+  process_result: true
+
+commands:
+  - command: show platform
+    patterns:
+      - pattern_string: '^(?:(?:([a-zA-Z_\-0-9\/\(\)]+)\s+){2})(?!.*IOS XR RUN|.*UP|.*OPERATIONAL)'
+```
+
+## Simple Repro Example
+
+```yaml
+repro:
+  times: 30
+  interval: 10
+  stop_when_triggered: true
+  if_triggered_commands:
+    - command: show tech-support
+      command_timeout: 300
+
+tests:
+  - command: ping 10.0.0.1 count 5
+    command_tests:
+      - id: 1
+        pattern:
+          pattern_string: 'Success rate is\s+0\s+percent'
+        if_triggered_commands:
+          - command: show logging last 50
+
+commands:
+  - command: ping 10.0.0.1 count 5
+    command_test_ids: [1]
 ```

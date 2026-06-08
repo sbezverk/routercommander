@@ -92,7 +92,7 @@ func TestParseCommandFile(t *testing.T) {
 			fail:   false,
 		},
 		{
-			name: "capture case 1",
+			name: "command patterns",
 			input: []byte(`commands:
 - command: "run netstat -aup | grep tcp"
   times: 3600
@@ -100,12 +100,6 @@ func TestParseCommandFile(t *testing.T) {
   process_result: true
   patterns:
   - pattern_string:  SndbufErrors:\s*[0-9+]
-    captured_values:
-    - field_number: 2
-      operation: "compare_with_previous"
-    capture:
-      field_number: [2]
-      separator: ":"
   debug: false`),
 			expect: &Commander{
 				MainCommandGroup: []*Command{
