@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 go_library(
     name = "types",
     srcs = [
+        "commander_clone.go",
         "commands.go",
         "local.go",
         "platform.go",

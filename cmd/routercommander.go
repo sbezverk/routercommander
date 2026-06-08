@@ -8,10 +8,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/x/term"
@@ -24,23 +25,25 @@ import (
 )
 
 var (
-	local          bool
-	rtrFile        string
-	rtrName        string
-	cmdFile        string
-	login          string
-	pass           string
-	port           int
-	notify         bool
-	smtpServer     string
-	smtpUser       string
-	smtpPass       string
-	smtpFrom       string
-	smtpTo         string
-	logLoc         string
-	knownHostsFile string
-	insecureSSH    bool
-	passwordStdin  bool
+	local                   bool
+	rtrFile                 string
+	rtrName                 string
+	cmdFile                 string
+	login                   string
+	pass                    string
+	port                    int
+	notify                  bool
+	smtpServer              string
+	smtpUser                string
+	smtpPass                string
+	smtpFrom                string
+	smtpTo                  string
+	logLoc                  string
+	knownHostsFile          string
+	insecureSSH             bool
+	passwordStdin           bool
+	maxConcurrentSessions   int
+	sessionsStartIntervalMS int
 )
 
 func init() {
@@ -62,6 +65,8 @@ func init() {
 	flag.StringVar(&knownHostsFile, "known-hosts-file", defaultKnownHostsFile(), "path to the known hosts file for SSH")
 	flag.BoolVar(&insecureSSH, "insecure-ssh", false, "when set to true, SSH host key verification will be disabled and new host keys will not be added to the known hosts file")
 	flag.BoolVar(&passwordStdin, "password-stdin", false, "read the password from stdin")
+	flag.IntVar(&maxConcurrentSessions, "max-concurrent-sessions", 10, "maximum number of concurrent SSH sessions to routers, default 10")
+	flag.IntVar(&sessionsStartIntervalMS, "sessions-start-interval-ms", 500, "time interval in milliseconds between starting SSH sessions to routers, default 500ms")
 }
 
 type RouterInventory struct {
@@ -164,6 +169,9 @@ func getRoutersInventory(fileName string) (*RouterInventory, error) {
 		}
 		normalized.Routers[normName] = target
 	}
+	if glog.V(3) {
+		glog.Infof("loaded %d router(s) from inventory file %s", len(normalized.Routers), fileName)
+	}
 
 	return normalized, nil
 }
@@ -197,6 +205,14 @@ func main() {
 	var fatalErr error
 	var wg sync.WaitGroup
 
+	if sessionsStartIntervalMS <= 0 {
+		glog.Errorf("invalid value for --sessions-start-interval-ms parameter: %d, it cannot be negative or zero, exiting...", sessionsStartIntervalMS)
+		os.Exit(1)
+	}
+	if maxConcurrentSessions <= 0 {
+		glog.Errorf("invalid value for --max-concurrent-sessions parameter: %d, it cannot be negative or zero, exiting...", maxConcurrentSessions)
+		os.Exit(1)
+	}
 	singleRouterCase := rtrName != ""
 	if !local {
 		switch {
@@ -289,8 +305,8 @@ func main() {
 		}
 	}
 	errCh := make(chan error, (len(routers)))
-	runProcessing := func(r types.Router) {
-		errCh <- process(r, commands, n)
+	runProcessing := func(r types.Router, commander *types.Commander) {
+		errCh <- process(r, commander, n)
 	}
 
 	if passwordStdin {
@@ -302,8 +318,33 @@ func main() {
 		}
 		pass = pw
 	}
+	if glog.V(3) {
+		glog.Infof("number of routers selected for processing: %d", len(routers))
+	}
 	processesStarted := 0
-	for _, router := range routers {
+	sessionStartTicker := time.NewTicker(time.Duration(sessionsStartIntervalMS) * time.Millisecond)
+	defer sessionStartTicker.Stop()
+	breakCh := make(chan os.Signal, 1)
+	signal.Notify(breakCh, os.Interrupt)
+	broken := false
+	var availableWorkers atomic.Int32
+	availableWorkers.Store(int32(maxConcurrentSessions))
+	for i, router := range routers {
+		sessionStartTicker.Reset(time.Duration(sessionsStartIntervalMS) * time.Millisecond)
+		if broken {
+			glog.Infof("skipping starting session for router %s as interrupt signal is received", router)
+			break
+		}
+		if i != 0 {
+			select {
+			case <-breakCh:
+				glog.Infof("interrupt signal received, stopping the process...")
+				broken = true
+				continue
+			case <-sessionStartTicker.C:
+				sessionStartTicker.Stop()
+			}
+		}
 		actRouter := router
 		actPort := port
 		actLogin := login
@@ -326,42 +367,70 @@ func main() {
 				actLogin = target.Username
 			}
 		}
-		var li log.Logger
-		li, err = log.NewLogger(router, logLoc)
-		if err != nil {
-			glog.Errorf("failed to instantiate logger interface with error: %+v", err)
-			os.Exit(1)
-		}
-		var r types.Router
-		if local {
-			r = types.NewLocalRouter(actRouter, li)
-		} else {
-			var sshVerifier Verifier
-			sshVerifier, err = NewVerifier(knownHostsFile, insecureSSH)
-			if err != nil {
-				glog.Errorf("failed to get SSH configuration with error: %+v, exiting...", err)
-				os.Exit(1)
+		// Loop to wait for available worker before starting the process, this is needed to control the number of concurrent SSH sessions to routers, which can cause resource exhaustion on the machine running routercommander or on the routers themselves if too many sessions are started at the same time
+		for !broken {
+			select {
+			case <-breakCh:
+				broken = true
+				continue
+			default:
 			}
-			r, err = types.NewRouter(actRouter, actPort, actPlatform, sshVerifier.GetSSHConfig(actLogin, pass), li)
-			if err != nil {
-				glog.Errorf("failed to instantiate router object for router: %s:%d with error: %+v", actRouter, actPort, err)
-				if !stopOnError && !singleRouterCase {
-					continue
-				}
-				fatalErr = err
+			if availableWorkers.Add(-1) < 0 {
+				availableWorkers.Add(1)
+				time.Sleep(time.Duration(sessionsStartIntervalMS/2) * time.Millisecond)
+			} else {
 				break
 			}
+			continue
 		}
-		if runtime.GOOS != "windows" {
+		if !broken {
+			var li log.Logger
+			li, err = log.NewLogger(router, logLoc)
+			if err != nil {
+				glog.Errorf("failed to instantiate logger interface with error: %+v", err)
+				os.Exit(1)
+			}
+			var r types.Router
+			if local {
+				r = types.NewLocalRouter(actRouter, li)
+			} else {
+				var sshVerifier Verifier
+				sshVerifier, err = NewVerifier(knownHostsFile, insecureSSH)
+				if err != nil {
+					glog.Errorf("failed to get SSH configuration with error: %+v, exiting...", err)
+					if li != nil {
+						li.Close()
+					}
+					if !stopOnError && !singleRouterCase {
+						availableWorkers.Add(1)
+						continue
+					}
+					fatalErr = err
+					break
+				}
+				r, err = types.NewRouter(actRouter, actPort, actPlatform, sshVerifier.GetSSHConfig(actLogin, pass), li)
+				if err != nil {
+					glog.Errorf("failed to instantiate router object for router: %s:%d with error: %+v", actRouter, actPort, err)
+					if li != nil {
+						li.Close()
+					}
+					if !stopOnError && !singleRouterCase {
+						availableWorkers.Add(1)
+						continue
+					}
+					fatalErr = err
+					break
+				}
+			}
+			routerCommands := commands.CloneForRun()
 			wg.Add(1)
-			go func(r types.Router) {
+			go func(r types.Router, commander *types.Commander) {
 				defer wg.Done()
-				runProcessing(r)
-			}(r)
-		} else {
-			runProcessing(r)
+				runProcessing(r, commander)
+				availableWorkers.Add(1)
+			}(r, routerCommands)
+			processesStarted++
 		}
-		processesStarted++
 	}
 	pass = ""
 	for i := 0; i < processesStarted; i++ {
@@ -371,7 +440,9 @@ func main() {
 			fatalErr = err
 		}
 	}
-	wg.Wait()
+	if processesStarted != 0 {
+		wg.Wait()
+	}
 	close(errCh)
 	glog.Infof("all processes have finished, exiting...")
 	if fatalErr == nil {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -361,5 +362,211 @@ HR - Hard Reset,     DC  - Disconnect signal,  DL - DownLoad
 				t.Fatalf("expect triggered to be %t but got %t", tt.triggered, triggered)
 			}
 		})
+	}
+}
+
+func TestFrettaHealthCheckHealthySamplesDoNotTrigger(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []*types.CmdResult
+		test  *types.Test
+	}{
+		{
+			name: "fabric plane all up",
+			input: []*types.CmdResult{
+				{
+					Cmd: "admin show controller fabric plane all",
+					Result: []byte(`Plane Admin Plane    up->dn  up->mcast
+Id    State State    counter   counter
+--------------------------------------
+0     UP    UP             0         2
+1     UP    UP             0         2
+2     UP    UP             0         2
+3     UP    UP             0         2
+4     UP    UP             0         2
+5     UP    UP             0         2
+`),
+				},
+			},
+			test: &types.Test{
+				ValuesStore: make(map[int]map[int]interface{}),
+				Pattern: &types.Pattern{
+					PatternString: `(?m)^[0-5]\s+\w`,
+				},
+				Separator: " ",
+				Fields: []*types.Field{
+					{
+						FieldNumber: 1,
+						Operation:   "compare_with_value_neq",
+						Value:       "UP",
+					},
+					{
+						FieldNumber: 2,
+						Operation:   "compare_with_value_neq",
+						Value:       "UP",
+					},
+				},
+			},
+		},
+		{
+			name: "sfe driver all healthy",
+			input: []*types.CmdResult{
+				{
+					Cmd: "admin show controller sfe driver location all",
+					Result: []byte(`| Asic inst.|card|HP|Asic| Admin|plane| Fgid| Asic State |DC| Last  |PON|HR |
+|  (R/S/A)  |pwrd|  |type| /Oper|/grp | DL  |            |  | init  |(#)|(#)|
++---------------------------------------------------------------------------+
+| 0/FC0/0   | UP | 1|s123| UP/UP| 0/A | DONE| NRML       | 0| PON   |  1|  0|
+| 0/FC0/1   | UP | 1|s123| UP/UP| 0/A | DONE| NRML       | 0| PON   |  1|  0|
+`),
+				},
+			},
+			test: &types.Test{
+				ValuesStore: make(map[int]map[int]interface{}),
+				Pattern: &types.Pattern{
+					PatternString: "0/FC[0-9]/[0-9]",
+				},
+				Separator: "|",
+				Fields: []*types.Field{
+					{
+						FieldNumber: 2,
+						Operation:   "compare_with_value_neq",
+						Value:       "UP",
+					},
+					{
+						FieldNumber: 5,
+						Operation:   "compare_with_value_neq",
+						Value:       "UP/UP",
+					},
+					{
+						FieldNumber: 8,
+						Operation:   "compare_with_value_neq",
+						Value:       "NRML",
+					},
+				},
+			},
+		},
+		{
+			name: "watchdog memory normal",
+			input: []*types.CmdResult{
+				{
+					Cmd: "show watchdog memory-state location all",
+					Result: []byte(`---- node0_4_CPU0 ----
+Memory information:
+    Physical Memory	: 29183.0   MB
+    Free Memory		: 24460.871 MB
+    Memory State	:   Normal
+`),
+				},
+			},
+			test: &types.Test{
+				ValuesStore: make(map[int]map[int]interface{}),
+				Pattern: &types.Pattern{
+					PatternString: `Memory\s+State\s+:`,
+				},
+				Separator: ":",
+				Fields: []*types.Field{
+					{
+						FieldNumber: 1,
+						Operation:   "compare_with_value_neq",
+						Value:       "Normal",
+					},
+				},
+			},
+		},
+		{
+			name: "fabric health ok",
+			input: []*types.CmdResult{
+				{
+					Cmd: "admin show controller fabric health",
+					Result: []byte(`|SFE status  |  Ok |  Ok |  Ok |  Ok |  Ok |  Ok |
+`),
+				},
+			},
+			test: &types.Test{
+				ValuesStore: make(map[int]map[int]interface{}),
+				Pattern: &types.Pattern{
+					PatternString: "SFE status",
+				},
+				Separator: "|",
+				Fields: []*types.Field{
+					{
+						FieldNumber: 2,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+					{
+						FieldNumber: 3,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+					{
+						FieldNumber: 4,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+					{
+						FieldNumber: 5,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+					{
+						FieldNumber: 6,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+					{
+						FieldNumber: 7,
+						Operation:   "compare_with_value_neq",
+						Value:       "Ok",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			triggered, err := runTest(tt.input, tt.test, 0)
+			if err != nil {
+				t.Fatalf("failed with error: %+v", err)
+			}
+			if triggered {
+				t.Fatalf("healthy sample triggered test")
+			}
+		})
+	}
+}
+
+func TestRunTestsWithoutExplicitIDsRunsAllCommandTests(t *testing.T) {
+	results := []*types.CmdResult{
+		{
+			Cmd:    "show health",
+			Result: []byte("router is healthy\nFAULT detected\n"),
+		},
+	}
+	tests := &types.Tests{
+		Cmd: "show health",
+		Tests: map[int]*types.Test{
+			1: {
+				ID: 1,
+				Pattern: &types.Pattern{
+					PatternString: "MISSING",
+				},
+			},
+			2: {
+				ID: 2,
+				Pattern: &types.Pattern{
+					PatternString: "FAULT",
+				},
+			},
+		},
+	}
+
+	triggers, err := runTests(nil, results, nil, tests, 0, false)
+	if err != nil {
+		t.Fatalf("failed to run tests: %+v", err)
+	}
+	if !reflect.DeepEqual(triggers, []int{2}) {
+		t.Fatalf("expected omitted command_test_ids to run all tests and trigger [2], got %+v", triggers)
 	}
 }

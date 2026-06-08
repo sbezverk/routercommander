@@ -13,7 +13,7 @@ func TestGetRoutersInventoryDefaultsAddressToRouterName(t *testing.T) {
   DRCTAM51:
     platform: iosxr
     username: admin
-  DRCTAM52:
+  DRCTAM52: {}
   logical-r1:
     address: vxr-slurm-307
     port: 24965

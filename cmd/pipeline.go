@@ -151,6 +151,12 @@ func processMainGroupOfCommands(r types.Router, commander *types.Commander, iter
 func runTests(r types.Router, results []*types.CmdResult, toRun []int, tests *types.Tests, iteration int, stopWhenTriggered bool) ([]int, error) {
 	triggers := make([]int, 0)
 
+	if len(toRun) == 0 {
+		// No specific test IDs requested, running all tests for the command
+		for _, t := range tests.Tests {
+			toRun = append(toRun, t.ID)
+		}
+	}
 out:
 	for _, tr := range toRun {
 		t, ok := tests.Tests[tr]
