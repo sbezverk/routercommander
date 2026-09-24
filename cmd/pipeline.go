@@ -153,7 +153,7 @@ func runTests(r types.Router, results []*types.CmdResult, toRun []int, tests *ty
 
 	if len(toRun) == 0 {
 		// No specific test IDs requested, running all tests for the command
-		for _, t := range tests.Tests {
+		for _, t := range tests.Source {
 			toRun = append(toRun, t.ID)
 		}
 	}

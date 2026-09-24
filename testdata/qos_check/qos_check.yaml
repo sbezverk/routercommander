@@ -1,6 +1,5 @@
 collect:
   process_result: false
-  stop_on_error: false
 commands:
   - command: run on -f {{.Location}} /pkg/bin/np_perf -e 0 -R | grep TM
     location_fmt_tmpl: node0_{{.Slot}}_cpu0

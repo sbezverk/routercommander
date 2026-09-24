@@ -560,6 +560,20 @@ func TestRunTestsWithoutExplicitIDsRunsAllCommandTests(t *testing.T) {
 				},
 			},
 		},
+		Source: []*types.Test{
+			{
+				ID: 1,
+				Pattern: &types.Pattern{
+					PatternString: "MISSING",
+				},
+			},
+			{
+				ID: 2,
+				Pattern: &types.Pattern{
+					PatternString: "FAULT",
+				},
+			},
+		},
 	}
 
 	triggers, err := runTests(nil, results, nil, tests, 0, false)

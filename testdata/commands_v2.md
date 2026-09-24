@@ -6,7 +6,6 @@ This document describes the current command profile schema used by `routercomman
 
 ```yaml
 collect:
-  stop_on_error: false
   process_result: true
 
 repro:
@@ -51,13 +50,11 @@ Supported top-level keys:
 
 ```yaml
 collect:
-  stop_on_error: false
   process_result: true
 ```
 
 Fields:
 
-- `stop_on_error`: when true, a batch run stops after a router fails.
 - `process_result`: when true, command output is checked against configured patterns and tests in collect mode.
 
 ## repro

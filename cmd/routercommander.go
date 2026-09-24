@@ -213,7 +213,6 @@ func main() {
 		glog.Errorf("invalid value for --max-concurrent-sessions parameter: %d, it cannot be negative or zero, exiting...", maxConcurrentSessions)
 		os.Exit(1)
 	}
-	singleRouterCase := rtrName != ""
 	if !local {
 		switch {
 		case rtrName != "" && rtrFile == "":
@@ -298,12 +297,6 @@ func main() {
 		glog.Errorf("failed to get list of commands from file: %s with error: %+v, exiting...", cmdFile, err)
 		os.Exit(1)
 	}
-	stopOnError := true
-	if commands != nil {
-		if commands.Collect != nil {
-			stopOnError = commands.Collect.StopOnError
-		}
-	}
 	errCh := make(chan error, (len(routers)))
 	runProcessing := func(r types.Router, commander *types.Commander) {
 		errCh <- process(r, commander, n)
@@ -354,11 +347,8 @@ func main() {
 			target, err = resolveRouterTarget(router, inventory, port, login)
 			if err != nil {
 				glog.Errorf("failed to resolve router target for router: %s with error: %+v", router, err)
-				if !stopOnError && !singleRouterCase {
-					continue
-				}
 				fatalErr = err
-				break
+				continue
 			}
 			if target != nil {
 				actRouter = target.Address
@@ -388,7 +378,9 @@ func main() {
 			li, err = log.NewLogger(router, logLoc)
 			if err != nil {
 				glog.Errorf("failed to instantiate logger interface with error: %+v", err)
-				os.Exit(1)
+				fatalErr = err
+				availableWorkers.Add(1)
+				continue
 			}
 			var r types.Router
 			if local {
@@ -397,16 +389,13 @@ func main() {
 				var sshVerifier Verifier
 				sshVerifier, err = NewVerifier(knownHostsFile, insecureSSH)
 				if err != nil {
-					glog.Errorf("failed to get SSH configuration with error: %+v, exiting...", err)
+					glog.Errorf("failed to get SSH configuration with error: %+v", err)
+					fatalErr = err
 					if li != nil {
 						li.Close()
 					}
-					if !stopOnError && !singleRouterCase {
-						availableWorkers.Add(1)
-						continue
-					}
-					fatalErr = err
-					break
+					availableWorkers.Add(1)
+					continue
 				}
 				r, err = types.NewRouter(actRouter, actPort, actPlatform, sshVerifier.GetSSHConfig(actLogin, pass), li)
 				if err != nil {
@@ -414,12 +403,9 @@ func main() {
 					if li != nil {
 						li.Close()
 					}
-					if !stopOnError && !singleRouterCase {
-						availableWorkers.Add(1)
-						continue
-					}
 					fatalErr = err
-					break
+					availableWorkers.Add(1)
+					continue
 				}
 			}
 			routerCommands := commands.CloneForRun()
@@ -445,6 +431,9 @@ func main() {
 	}
 	close(errCh)
 	glog.Infof("all processes have finished, exiting...")
+	if broken {
+		os.Exit(130)
+	}
 	if fatalErr == nil {
 		os.Exit(0)
 	}

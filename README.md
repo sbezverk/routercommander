@@ -32,7 +32,6 @@ The active command YAML model uses these top-level sections:
 
 ```yaml
 collect:
-  stop_on_error: false
   process_result: true
 
 repro:
