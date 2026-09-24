@@ -2,9 +2,10 @@
 repro:
   times: 10000
   interval: 1
-# In collect mode, when repro section is absent, value of collect_result is forced true
+# process_result controls whether command output is checked against configured
+# patterns and tests in collect mode.
 collect:
-  health_check: false
+  process_result: false
 commands:
   - command: configure terminal
   - command: interface FourHundredGigE0/0/0/0

@@ -40,7 +40,6 @@ type Repro struct {
 }
 
 type Collect struct {
-	StopOnError   bool `yaml:"stop_on_error"`
 	ProcessResult bool `yaml:"process_result"`
 }
 

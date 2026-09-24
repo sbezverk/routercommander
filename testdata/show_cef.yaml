@@ -1,5 +1,5 @@
 collect:
-  health_check: true
+  process_result: true
 commands:
   - command: show cef drops
     command_timeout: 30

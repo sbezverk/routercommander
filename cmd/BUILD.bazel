@@ -34,6 +34,7 @@ go_test(
         "collect_test.go",
         "repro_test.go",
         "ssh_test.go",
+        "router_inventory_test.go",
     ],
     embed = [":routercommander_lib"],
     deps = [

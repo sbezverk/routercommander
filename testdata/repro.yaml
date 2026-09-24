@@ -3,7 +3,7 @@ repro:
   times: 2
   interval: 10
 collect:
-  health_check: false
+  process_result: false
 commands:
   - command: configure terminal
     wait_after: 10
@@ -16,6 +16,7 @@ commands:
     wait_after: 10
     #    times: 2
     #    interval: 10
-    #    pattern:
-    #      - '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    #    process_result: true
+    #    patterns:
+    #      - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
     debug: false

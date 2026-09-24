@@ -8,7 +8,7 @@ tests:
     - id: 1
       pattern:
         pattern_string: 'LDP-UDP'
-      field_separator: " "
+      separator: " "
       fields:
 # LDP-UDP     np             542            1000           518          0           default
         - field_number: 6

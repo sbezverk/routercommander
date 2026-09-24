@@ -2,15 +2,15 @@ repro:
   times: 100
   interval: 10
   # if_triggered_commands:
-  #   - command: 'repro test command'            
+  #   - command: 'repro test command'
   #     command_timeout: 2
   #     times: 1
   #     interval: 1
   #     wait_before: 1
   #     wait_after: 1
   #     debug: false
-  #     process_results: false
-  #     patterns: 
+  #     process_result: false
+  #     patterns:
   #       - pattern_string: 'test'
   #     command_test_ids: [0]
   stop_when_triggered: true
@@ -33,58 +33,58 @@ tests:
   #       value: "2"
   #     separator:
   #     if_triggered_commands:
-  #     - command: 'test if triggered command'            
+  #     - command: 'test if triggered command'
   #       command_timeout: 2
   #       times: 1
   #       interval: 1
   #       wait_before: 1
   #       wait_after: 1
   #       debug: false
-  #       process_results: false
-  #       patterns: 
+  #       process_result: false
+  #       patterns:
   #         - pattern_string: 'test'
   #       command_test_ids: [0]
   #     check_all_results: false
 commands:
   - command: 'configure'
     debug: false
-    process_results: false
+    process_result: false
   - command: 'interface FH0/0/0/0'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'shut'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'interface FH0/0/0/1'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'shut'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'commit'
     debug: false
-    process_results: false
+    process_result: false
   - command: 'interface FH0/0/0/0'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'no shut'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'interface FH0/0/0/1'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'no shut'
     debug: false
-    process_results: false 
+    process_result: false
   - command: 'commit'
     debug: false
-    process_results: false
+    process_result: false
   - command: 'end'
     debug: false
-    process_results: false
+    process_result: false
   - command: 'ping 2001:4860:1:1::27b1'
     patterns:
-    - patter_string: '^(\.){5}'
+    - pattern_string: '^(\.){5}'
     # command_test_ids: [1]
     # command_timeout: 2
   #  times: 1
@@ -92,4 +92,4 @@ commands:
   #  wait_before: 1
   #  wait_after: 1
     debug: false
-    process_results: false
+    process_result: false

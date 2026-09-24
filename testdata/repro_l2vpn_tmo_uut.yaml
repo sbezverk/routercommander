@@ -2,11 +2,12 @@
 repro:
   times: 10000
   interval: 1
-  commands:
+  if_triggered_commands:
     - command: "show arp | inc 10.177.15.11"
-# In collect mode, when repro section is absent, value of collect_result is forced true
+# process_result controls whether command output is checked against configured
+# patterns and tests in collect mode.
 collect:
-  health_check: false
+  process_result: false
 commands:
   - command: configure terminal
   - command: l2vpn
@@ -60,7 +61,7 @@ commands:
   - command: end
   - command: ping 10.177.15.11 count 1000 timeout 1
     debug: false
-    collect_result: true
-    pattern:
-      - 'Success rate is\s+0\s+percent'
+    process_result: true
+    patterns:
+      - pattern_string: 'Success rate is\s+0\s+percent'
 #      - 'Success rate is\s+[0-9][0-9]?\s+percent'

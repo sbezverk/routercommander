@@ -13,6 +13,8 @@ perf
 *.log
 old_junk/*
 bazel-*
+.gocache
+*tmo*
 
 # Test binary, built with `go test -c`
 *.test

@@ -11,7 +11,7 @@ repro:
       location:
       - 0/0/CPU0
       debug: false
-      process_results: false
+      process_result: false
       patterns: 
         - pattern_string: 'test'
       command_test_ids: [0]
@@ -44,7 +44,7 @@ tests:
         location:
         - 0/0/CPU0
         debug: false
-        process_results: false
+        process_result: false
         patterns: 
           - pattern_string: 'test'
         command_test_ids: [0]
@@ -52,7 +52,7 @@ tests:
 commands:
   - command: 'show cef drop'
     patterns:
-    - patter_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
+    - pattern_string: '((:?\w+\s)+)(drops\s+)(packets\s+:)\s+[1-9]\d*\n'
     command_test_ids: [1]
     command_timeout: 2
     times: 1
@@ -62,4 +62,4 @@ commands:
     location:
      - 0/0/CPU0
     debug: false
-    process_results: false
+    process_result: false
