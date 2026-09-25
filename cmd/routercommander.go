@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -322,6 +323,7 @@ func main() {
 	broken := false
 	var availableWorkers atomic.Int32
 	availableWorkers.Store(int32(maxConcurrentSessions))
+	sort.Strings(routers)
 	for i, router := range routers {
 		sessionStartTicker.Reset(time.Duration(sessionsStartIntervalMS) * time.Millisecond)
 		if broken {
@@ -409,6 +411,8 @@ func main() {
 				}
 			}
 			routerCommands := commands.CloneForRun()
+			glog.Infof("router %d/%d (%s): starting command set",
+				i+1, len(routers), router)
 			wg.Add(1)
 			go func(r types.Router, commander *types.Commander) {
 				defer wg.Done()

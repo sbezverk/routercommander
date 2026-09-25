@@ -11,6 +11,7 @@ go_library(
         "platform.go",
         "router.go",
         "types.go",
+        "pipeline_processor_types.go",
     ],
     importpath = "github.com/sbezverk/routercommander/pkg/types",
     deps = [

@@ -25,10 +25,12 @@ type Command struct {
 }
 
 type Commander struct {
-	Repro             *Repro     `yaml:"repro"`
-	Collect           *Collect   `yaml:"collect"`
-	Tests             []*Tests   `yaml:"tests"`
-	MainCommandGroup  []*Command `yaml:"commands"`
+	Repro             *Repro          `yaml:"repro"`
+	Collect           *Collect        `yaml:"collect"`
+	Tests             []*Tests        `yaml:"tests"`
+	MainCommandGroup  []*Command      `yaml:"commands"`
+	Pipeline          []*PipelineStep `yaml:"pipeline"`
+	PipelineLimits    *PipelineLimits `yaml:"pipeline_limits"`
 	CommandsWithTests map[string]*Tests
 }
 
@@ -76,4 +78,9 @@ type Pattern struct {
 type CommandResult struct {
 	PatternMatch  []string
 	TriggeredTest []int
+}
+
+type PipelineLimits struct {
+	MaxDepth    int `yaml:"max_depth"`
+	MaxCommands int `yaml:"max_commands"`
 }

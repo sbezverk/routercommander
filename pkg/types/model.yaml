@@ -63,3 +63,99 @@ commands:
      - 0/0/CPU0
     debug: false
     process_result: false
+# Pipeline configuration for automated command execution and result extraction
+pipeline_limits:
+  max_depth: 8
+  max_commands: 5000
+pipeline:
+  - id: discover_ipv4_unresolved
+    run:
+      command: show cef vrf all ipv4 unresolved
+      location:
+        - 0/RP0/CPU0
+      process_result: true
+
+    extract:
+      context:
+        - pattern: '^VRF:\s+(?P<vrf>[A-Za-z0-9_.:-]+)\s*$'
+
+      records:
+        name: route
+        pattern: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+(?P<next_hop>[0-9A-Fa-f:.]+/\d+)'
+        inherit:
+          - vrf
+        deduplicate_by:
+          - vrf
+          - prefix
+          - next_hop
+
+    for_each:
+      in: route
+      steps:
+        - id: inspect_prefix_egress
+          run:
+            command: show cef vrf {{.vrf}} {{.prefix}} hardware egress detail
+            location:
+              - all
+          on_error: continue_record
+
+        - id: inspect_next_hop_egress
+          run:
+            command: show cef {{.next_hop}} hardware egress detail
+            location:
+              - all
+          on_error: continue_record
+# Branching logic for executing commands based on field values
+  - id: classify_route
+    branch:
+      cases:
+        - when:
+            field: field_1
+            equals: blah
+          then:
+            - run:
+                command: show command-two
+
+        - when:
+            field: field_1
+            equals: halb
+          then:
+            - run:
+                command: show command-three
+      default:
+        - run:
+            command: show command-default
+# recursive commands execution when parent command provides values used to render a child command
+  - id: level_one_discovery
+    run:
+      command: show discovery-one
+    extract:
+      records:
+        name: first_records
+        pattern: '^(?P<first_value>\S+)'
+    for_each:
+      in: first_records
+      steps:
+        - id: level_two_command
+          run:
+            command: show discovery-two {{.first_value}}
+          extract:
+            records:
+              name: second_records
+              pattern: '^(?P<second_value>\S+)'
+          for_each:
+            in: second_records
+            steps:
+              - id: level_three_command
+                run:
+                  command: show discovery-three {{.second_value}}
+                extract:
+                  records:
+                    name: third_records
+                    pattern: '^(?P<third_value>\S+)'
+                for_each:
+                  in: third_records
+                  steps:
+                    - id: level_four_command
+                      run:
+                        command: show detail {{.third_value}}
