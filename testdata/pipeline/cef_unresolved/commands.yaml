@@ -1,0 +1,91 @@
+# Discover unresolved CEF prefixes and next hops.
+#
+# The output has one prefix on the first row and additional next hops on
+# continuation rows. Two extraction steps intentionally reference the same
+# command result:
+#   - prefixes produces one record per prefix;
+#   - next_hops produces one record per next hop and inherits the current
+#     prefix context.
+#
+# This produces one prefix inspection command and one next-hop inspection
+# command for every next hop.
+
+pipeline:
+  - id: discover_unresolved
+    run:
+      command: show cef vrf all unresolved
+      location:
+        - 0/RP0/CPU0
+
+  - id: extract_prefixes
+    extract:
+      from_step_id: discover_unresolved
+      context:
+        - pattern:
+            pattern_string: '^VRF:\s+(?P<vrf>[A-Za-z0-9_.:-]+)\s*$'
+      record_spec:
+        name: prefixes
+        pattern:
+          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)\s*$'
+        inherit:
+          - vrf
+        deduplicate_by:
+          - vrf
+          - prefix
+
+  - id: extract_next_hops
+    extract:
+      from_step_id: discover_unresolved
+      context:
+        - pattern:
+            pattern_string: '^VRF:\s+(?P<vrf>[A-Za-z0-9_.:-]+)\s*$'
+        # This matches only the first row of a prefix block. Requiring two
+        # address/prefix tokens prevents continuation rows from replacing the
+        # current prefix with a next-hop value.
+        - pattern:
+            pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)\s*$'
+      record_spec:
+        name: next_hops
+        pattern:
+          # The prefix is optional so this matches both the first row and
+          # continuation rows in the output.
+          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)\s*$'
+        inherit:
+          - vrf
+          - prefix
+        deduplicate_by:
+          - vrf
+          - prefix
+          - next_hop
+
+  - id: inspect_prefixes
+    for_each:
+      in: prefixes
+      steps:
+        - id: inspect_prefix
+          run:
+            command: show cef vrf {{.vrf}} {{.prefix}} detail
+
+  - id: inspect_next_hops
+    for_each:
+      in: next_hops
+      steps:
+        - id: inspect_next_hop
+          run:
+            command: show cef {{.next_hop}} detail
+
+        - id: extract_local_label
+          extract:
+            from_step_id: inspect_next_hop
+            record_spec:
+              name: local_labels
+              pattern:
+                pattern_string: '^\s*local label\s+(?P<local_label>\d+)\s+labels imposed\s+\{[^}]+\}\s*$'
+
+        - id: inspect_local_labels
+          for_each:
+            in: local_labels
+            steps:
+              - id: inspect_mpls_label
+                run:
+                  command: sh mpls forwarding labels {{.local_label}} {{.local_label}} detail

@@ -32,6 +32,8 @@ func normalizeCommanderForTest(c *Commander) *Commander {
 			}
 			cmdCopy := *cmd
 			cmdCopy.CommandResult = nil
+			cmdCopy.templatedCmd = nil
+			cmdCopy.templatedLocation = nil
 			if len(cmd.Patterns) != 0 {
 				cmdCopy.Patterns = make([]*Pattern, len(cmd.Patterns))
 				for j, p := range cmd.Patterns {
@@ -88,8 +90,8 @@ func TestParseCommandFile(t *testing.T) {
 		{
 			name:   "empty input",
 			input:  []byte(``),
-			expect: &Commander{},
-			fail:   false,
+			expect: nil,
+			fail:   true,
 		},
 		{
 			name: "command patterns",
@@ -332,5 +334,48 @@ func TestCommanderCloneForRunIsolatesMutableState(t *testing.T) {
 	}
 	if clone.CommandsWithTests["show version"] == commands.CommandsWithTests["show version"] {
 		t.Fatalf("cloned command test index points to source tests")
+	}
+}
+
+func TestCommanderCloneForRunPreservesPipelineState(t *testing.T) {
+	commands := &Commander{
+		Pipeline: []*PipelineStep{
+			{
+				ID: "run",
+				Run: &Command{
+					Cmd:      "show cef {{.prefix}}",
+					Location: []string{"all"},
+				},
+			},
+		},
+		PipelineLimits: &PipelineLimits{
+			MaxDepth:    4,
+			MaxCommands: 20,
+		},
+	}
+
+	clone := commands.CloneForRun()
+	if len(clone.Pipeline) != 1 {
+		t.Fatalf("expected cloned pipeline to contain one step, got %d", len(clone.Pipeline))
+	}
+	if clone.PipelineLimits == nil || clone.PipelineLimits == commands.PipelineLimits {
+		t.Fatalf("pipeline limits were not copied independently")
+	}
+	if clone.PipelineLimits.MaxDepth != 4 || clone.PipelineLimits.MaxCommands != 20 {
+		t.Fatalf("pipeline limits were not preserved: %+v", clone.PipelineLimits)
+	}
+
+	clone.Pipeline[0].Run.Cmd = "show version"
+	clone.Pipeline[0].Run.Location[0] = "0/0/CPU0"
+	clone.PipelineLimits.MaxDepth = 8
+
+	if commands.Pipeline[0].Run.Cmd != "show cef {{.prefix}}" {
+		t.Fatalf("source pipeline command was mutated")
+	}
+	if commands.Pipeline[0].Run.Location[0] != "all" {
+		t.Fatalf("source pipeline location was mutated")
+	}
+	if commands.PipelineLimits.MaxDepth != 4 {
+		t.Fatalf("source pipeline limits were mutated")
 	}
 }

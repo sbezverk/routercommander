@@ -34,7 +34,7 @@ func (l *localRouter) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdRe
 		Delay(cmd.WaitBefore)
 	}
 	commandTimeout := DefaultCommandTimeout
-	if cmd.CmdTimeout != 0 {
+	if cmd.CmdTimeout > 0 {
 		commandTimeout = cmd.CmdTimeout
 	}
 	var err error
@@ -53,14 +53,18 @@ func (l *localRouter) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdRe
 }
 
 func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
+	effectiveInterval := interval
+	if effectiveInterval == 0 {
+		effectiveInterval = DefaultSafeInterval
+	}
 	if glog.V(5) {
-		if interval == 0 || times == 0 {
+		if times == 0 {
 			glog.Infof("Sending command: %q to router: %q", cmd, l.GetName())
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, interval, l.GetName())
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q", cmd, times, effectiveInterval, l.GetName())
 		}
 	}
-	if interval == 0 || times == 0 {
+	if times == 0 {
 		b, err := l.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
@@ -78,7 +82,7 @@ func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool, c
 		}, err
 	}
 	results := make([]*CmdResult, 0)
-	ticker := time.NewTicker(time.Second * time.Duration(interval))
+	ticker := time.NewTicker(time.Second * time.Duration(effectiveInterval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
 		b, err := l.GetData(cmd, debug, commandTimeout)
@@ -94,7 +98,9 @@ func (l *localRouter) sendCommand(cmd string, times, interval int, debug bool, c
 			Cmd:    cmd,
 			Result: b,
 		})
-		<-ticker.C
+		if t+1 < times {
+			<-ticker.C
+		}
 	}
 
 	return results, nil

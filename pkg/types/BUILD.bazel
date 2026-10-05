@@ -12,6 +12,7 @@ go_library(
         "router.go",
         "types.go",
         "pipeline_processor_types.go",
+        "errors.go",
     ],
     importpath = "github.com/sbezverk/routercommander/pkg/types",
     deps = [
@@ -27,10 +28,15 @@ go_test(
     name = "types_test",
     srcs = [
         "model_test.go",
+        "phase1_test.go",
+        "pipeline_validation_test.go",
         "platform_test.go",
         "types_test.go",
     ],
-    data = ["model.yaml"],
+    data = [
+        "model.yaml",
+        "pipeline_model.yaml",
+    ],
     embed = [":types"],
     deps = [
         "@com_github_go_test_deep//:go_default_library",

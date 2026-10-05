@@ -3,10 +3,11 @@ package types
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
+	"maps"
 	"strconv"
 	"sync/atomic"
+	"text/template"
 
 	"regexp"
 	"strings"
@@ -22,6 +23,7 @@ import (
 
 const (
 	DefaultCommandTimeout = 120
+	DefaultSafeInterval   = 1 // second
 )
 
 var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -164,14 +166,21 @@ func (r *router) GetLogger() log.Logger {
 }
 
 type CmdResult struct {
-	Cmd    string
-	Result []byte
+	Cmd      string
+	Location string
+	Result   []byte
 }
 
 func Delay(d int) {
 	t := time.NewTimer(time.Duration(d) * time.Second)
 	defer t.Stop()
 	<-t.C
+}
+
+func cloneRenderData(data map[string]any) map[string]any {
+	newData := make(map[string]any)
+	maps.Copy(newData, data)
+	return newData
 }
 
 func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult, error) {
@@ -184,7 +193,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 		Delay(cmd.WaitBefore)
 	}
 	commandTimeout := DefaultCommandTimeout
-	if cmd.CmdTimeout != 0 && cmd.CmdTimeout > DefaultCommandTimeout {
+	if cmd.CmdTimeout > 0 {
 		commandTimeout = cmd.CmdTimeout
 	}
 	pipeModifier := ""
@@ -196,9 +205,26 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 	}
 	if len(cmd.Location) == 0 {
 		var err error
-		rs, err := r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
-		if err != nil {
-			return nil, err
+		var rs []*CmdResult
+		if cmd.runtimeRenderData == nil {
+			rs, err = r.sendCommand(c+pipeModifier, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			renderData := cloneRenderData(cmd.runtimeRenderData)
+			rendered, err := cmd.Render(renderData)
+			if err != nil {
+				return nil, err
+			}
+			commandText := rendered + pipeModifier
+			if err := cmd.ValidateRendered(commandText); err != nil {
+				return nil, err
+			}
+			rs, err = r.sendCommand(commandText, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if collectResult {
 			results = append(results, rs...)
@@ -259,13 +285,17 @@ func prepareLocations(r *router, cmd *Command) ([]string, error) {
 		}
 	}
 	if cmd.LocationFmtTmpl == "" {
-		// No location customization format
 		return locs, nil
 	}
-	tmpl, err := template.New("Slot").Parse(cmd.LocationFmtTmpl)
-	if err != nil {
-		return nil, err
+	tmpl := cmd.templatedLocation
+	if tmpl == nil {
+		var err error
+		tmpl, err = template.New("location").Option("missingkey=error").Parse(cmd.LocationFmtTmpl)
+		if err != nil {
+			return nil, fmt.Errorf("location format template parsing failed: %v", err)
+		}
 	}
+	var err error
 	for i := 0; i < len(locs); i++ {
 		locs[i], err = transforLocation(tmpl, locs[i])
 		if err != nil {
@@ -278,14 +308,7 @@ func prepareLocations(r *router, cmd *Command) ([]string, error) {
 
 func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipeModifier string, commandTimeout int) ([]*CmdResult, error) {
 	results := make([]*CmdResult, 0)
-	var tmpl *template.Template
-	var err error
-	if cmd.LocationCustomized {
-		tmpl, err = template.New("Command").Parse(cmd.Cmd)
-		if err != nil {
-			return nil, err
-		}
-	}
+
 	for _, l := range locations {
 		switch l {
 		case "all":
@@ -310,26 +333,53 @@ func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipe
 			}
 			results = append(results, rs...)
 		default:
-			var fc string
-			if !cmd.LocationCustomized {
-				fc = cmd.Cmd + " " + "location " + l + " " + pipeModifier
-
+			var err error
+			var rendered string
+			if cmd.runtimeRenderData == nil {
+				var renderData any
+				if cmd.LocationCustomized {
+					renderData = struct {
+						Location string
+					}{Location: l}
+					rendered, err = cmd.Render(renderData)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					rendered = cmd.Cmd
+				}
 			} else {
-				buf := new(bytes.Buffer)
-				if err := tmpl.Execute(buf, struct {
-					Location string
-				}{
-					Location: l,
-				}); err != nil {
+				renderData := cloneRenderData(cmd.runtimeRenderData)
+				renderData["Location"] = l
+				rendered, err = cmd.Render(renderData)
+				if err != nil {
 					return nil, err
 				}
-				fc = buf.String() + " " + pipeModifier
+			}
+			if cmd.runtimeRenderData != nil {
+				if err := cmd.ValidateRendered(rendered); err != nil {
+					return nil, err
+				}
+			}
+			fc := rendered
+			if !cmd.LocationCustomized {
+				fc += " location " + l
+			}
+			fc += " " + pipeModifier
+			if cmd.runtimeRenderData != nil {
+				if err := cmd.ValidateRendered(fc); err != nil {
+					return nil, err
+				}
 			}
 			rs, err := r.sendCommand(fc, cmd.Times, cmd.Interval, cmd.Debug, commandTimeout)
 			if err != nil {
 				return nil, err
 			}
-			results = append(results, rs...)
+			for _, res := range rs {
+				res.Location = l
+				res.Cmd = fc
+				results = append(results, res)
+			}
 		}
 	}
 
@@ -337,14 +387,18 @@ func (r *router) sendCommandWithLocations(cmd *Command, locations []string, pipe
 }
 
 func (r *router) sendCommand(cmd string, times, interval int, debug bool, commandTimeout int) ([]*CmdResult, error) {
+	effectiveInterval := interval
+	if effectiveInterval == 0 {
+		effectiveInterval = DefaultSafeInterval
+	}
 	if glog.V(5) {
-		if interval == 0 || times == 0 {
+		if times == 0 {
 			glog.Infof("Sending command: %q to router: %q, command timeout: %d seconds", cmd, r.GetName(), commandTimeout)
 		} else {
-			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q, command timeout: %d seconds", cmd, times, interval, r.GetName(), commandTimeout)
+			glog.Infof("Sending command: %q, %d times with interval of %d seconds to router: %q, command timeout: %d seconds", cmd, times, effectiveInterval, r.GetName(), commandTimeout)
 		}
 	}
-	if interval == 0 || times == 0 {
+	if times == 0 {
 		b, err := r.GetData(cmd, debug, commandTimeout)
 		if err != nil {
 			return nil, err
@@ -357,7 +411,7 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool, comman
 		}, err
 	}
 	results := make([]*CmdResult, 0)
-	ticker := time.NewTicker(time.Second * time.Duration(interval))
+	ticker := time.NewTicker(time.Second * time.Duration(effectiveInterval))
 	defer ticker.Stop()
 	for t := 0; t < times; t++ {
 		b, err := r.GetData(cmd, debug, commandTimeout)
@@ -368,7 +422,9 @@ func (r *router) sendCommand(cmd string, times, interval int, debug bool, comman
 			Cmd:    cmd,
 			Result: b,
 		})
-		<-ticker.C
+		if t+1 < times {
+			<-ticker.C
+		}
 	}
 
 	return results, nil

@@ -1,0 +1,128 @@
+pipeline_limits:
+  max_depth: 8
+  max_commands: 5000
+
+pipeline:
+  # Discover unresolved routes.
+  - id: discover_ipv4_unresolved
+    run:
+      command: show cef vrf all ipv4 unresolved
+      location:
+        - 0/RP0/CPU0
+      process_result: true
+
+  # Extract the VRF context and route records from the discovery output.
+  - id: extract_ipv4_unresolved
+    extract:
+      from_step_id: discover_ipv4_unresolved
+      context:
+        - pattern:
+            pattern_string: '^VRF:\s+(?P<vrf>[A-Za-z0-9_.:-]+)\s*$'
+      record_spec:
+        max_records: 1000
+        name: route
+        pattern:
+          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+(?P<next_hop>[0-9A-Fa-f:.]+/\d+)'
+        inherit:
+          - vrf
+        deduplicate_by:
+          - vrf
+          - prefix
+          - next_hop
+
+  # Execute dependent commands once for every extracted route.
+  - id: inspect_routes
+    for_each:
+      in: route
+      steps:
+        - id: inspect_prefix_egress
+          run:
+            command: show cef vrf {{.vrf}} {{.prefix}} hardware egress detail
+            location:
+              - all
+          on_error: continue_record
+
+        - id: inspect_next_hop_egress
+          run:
+            command: show cef {{.next_hop}} hardware egress detail
+            location:
+              - all
+          on_error: continue_record
+
+  # Branching is a standalone step. Each branch step has its own ID.
+  - id: classify_route
+    branch:
+      cases:
+        - when:
+            field: field_1
+            equals: blah
+          steps:
+            - id: run_command_two
+              run:
+                command: show command-two
+
+        - when:
+            field: field_1
+            equals: halb
+          steps:
+            - id: run_command_three
+              run:
+                command: show command-three
+      default:
+        - id: run_default_command
+          run:
+            command: show command-default
+
+  # Recursive processing: each level is represented by separate run,
+  # extract, and for_each steps.
+  - id: level_one_discovery
+    run:
+      command: show discovery-one
+
+  - id: level_one_extract
+    extract:
+      from_step_id: level_one_discovery
+      record_spec:
+        name: first_records
+        pattern:
+          pattern_string: '^(?P<first_value>\S+)'
+
+  - id: level_one_for_each
+    for_each:
+      in: first_records
+      steps:
+        - id: level_two_command
+          run:
+            command: show discovery-two {{.first_value}}
+
+        - id: level_two_extract
+          extract:
+            from_step_id: level_two_command
+            record_spec:
+              name: second_records
+              pattern:
+                pattern_string: '^(?P<second_value>\S+)'
+
+        - id: level_two_for_each
+          for_each:
+            in: second_records
+            steps:
+              - id: level_three_command
+                run:
+                  command: show discovery-three {{.second_value}}
+
+              - id: level_three_extract
+                extract:
+                  from_step_id: level_three_command
+                  record_spec:
+                    name: third_records
+                    pattern:
+                      pattern_string: '^(?P<third_value>\S+)'
+
+              - id: level_three_for_each
+                for_each:
+                  in: third_records
+                  steps:
+                    - id: level_four_command
+                      run:
+                        command: show detail {{.third_value}}

@@ -1,0 +1,199 @@
+# Troubleshoot the affected BVI3318 ACL installation.
+#
+# The first three stages follow the dependency chain:
+#
+#   ACL usage -> BVI -> IFH -> filtered extlif object
+#
+# The internal-TCAM lookup then discovers the DB ID used by
+# INGRESS_ACL_L3_IPV4. The supplied VOQ output shows that the physical
+# interface hosting the affected path is on NPU 0, so the final diagshell
+# command uses NPU 0 explicitly and renders only the DB ID dynamically.
+#
+# The routercommander location is explicitly set on every command because
+# this test is for the fixed 0/0/CPU0 location. Location is deliberately not
+# repeated in the command text; ProcessCommand appends it from the YAML
+# location field.
+
+pipeline:
+  - id: discover_acl_interfaces
+    run:
+      command: show access-lists ipv4 UE-OUTBOUND-ROAMING-IPV4-IN usage pfilter
+      location:
+        - 0/RP0/CPU0
+
+  - id: extract_affected_bvi
+    extract:
+      from_step_id: discover_acl_interfaces
+      record_spec:
+        name: affected_bvis
+        pattern:
+          pattern_string: '^\s*Interface\s*:\s*(?P<bvi>BVI[0-9]+)\s*$'
+        where:
+          - field: bvi
+            equals: BVI3318
+        deduplicate_by:
+          - bvi
+
+  - id: inspect_affected_bvi
+    for_each:
+      in: affected_bvis
+      steps:
+        - id: discover_bvi_ifh
+          run:
+            command: show im database interface {{.bvi}}
+            location:
+              - 0/0/CPU0
+
+        - id: extract_bvi_ifh
+          extract:
+            from_step_id: discover_bvi_ifh
+            record_spec:
+              name: bvi_ifhs
+              pattern:
+                pattern_string: '^Interface\s+BVI[0-9]+,\s+ifh\s+(?P<ifh>0x[0-9A-Fa-f]+)\s+\('
+              deduplicate_by:
+                - ifh
+
+        - id: inspect_bvi_extlif
+          for_each:
+            in: bvi_ifhs
+            steps:
+              - id: discover_extlif
+                run:
+                  # The complete extlif output is collected here. The
+                  # extractor below identifies extlif records without relying
+                  # on a router-side pipe whose location would be appended by
+                  # ProcessCommand.
+                  command: show dpa objects extlif
+                  location:
+                    - 0/0/CPU0
+
+              - id: extract_extlif_acl
+                extract:
+                  from_step_id: discover_extlif
+                  context:
+                    - pattern:
+                        pattern_string: '^\s*@dpa_intf_t ifh => (?P<dpa_ifh>0x[0-9A-Fa-f]+)\s*$'
+                  record_spec:
+                    name: extlif_acl_bindings
+                    pattern:
+                      pattern_string: '^\s*uint16_t ipv4_acl_id => (?P<ipv4_acl_id>[0-9]+)\s*$'
+                    inherit:
+                      - dpa_ifh
+                    deduplicate_by:
+                      - dpa_ifh
+                      - ipv4_acl_id
+
+  # Discover the hosting NPUs dynamically:
+  #
+  #   BVI3318 -> Bundle-Ether41 -> physical members -> hosting NPU
+  #
+  # Bundle membership is extracted directly from each interface line. This
+  # intentionally discovers both Bundle-Ether41.3318 and
+  # Bundle-Ether99.3318 when both are attached to BVI3318.
+  - id: discover_bvi_l2vpn
+    run:
+      command: show run l2vpn
+
+  - id: extract_bvi_bundles
+    extract:
+      from_step_id: discover_bvi_l2vpn
+      record_spec:
+        name: bvi_bundles
+        pattern:
+          pattern_string: '^\s*interface Bundle-Ether(?P<bundle_id>[0-9]+)\.(?P<bvi_id>[0-9]+)\s*$'
+        where:
+          - field: bvi_id
+            equals: '3318'
+        deduplicate_by:
+          - bvi_id
+          - bundle_id
+
+  - id: inspect_bvi_bundles
+    for_each:
+      in: bvi_bundles
+      steps:
+        - id: inspect_bvi_bundle
+          run:
+            command: sh int bundle-ether {{.bundle_id}}
+
+        - id: extract_physical_interfaces
+          extract:
+            from_step_id: inspect_bvi_bundle
+            record_spec:
+              name: physical_interfaces
+              pattern:
+                pattern_string: '^\s*(?P<interface>TenGigE[0-9/]+)\s+Full-duplex\s+[0-9]+Mb/s\s+(?P<state>Active|Standby)\s*$'
+              deduplicate_by:
+                - interface
+
+        - id: inspect_physical_interfaces
+          for_each:
+            in: physical_interfaces
+            steps:
+              - id: discover_hosting_npu
+                run:
+                  command: sh controllers npu voq-usage interface {{.interface}} instance all
+                  location:
+                    - 0/0/CPU0
+
+              - id: extract_hosting_npus
+                extract:
+                  from_step_id: discover_hosting_npu
+                  record_spec:
+                    name: hosting_npus
+                    pattern:
+                      pattern_string: '^\s*\S+\s+\S+\s+(?P<npu>[0-9]+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s*$'
+                    deduplicate_by:
+                      - npu
+
+  - id: discover_internal_tcam
+    run:
+      command: show controllers npu internaltcam
+      location:
+        - 0/0/CPU0
+
+  - id: extract_ingress_acl_db
+    extract:
+      from_step_id: discover_internal_tcam
+      record_spec:
+        name: ingress_acl_databases
+        pattern:
+          pattern_string: '^\s*(?P<npu>[0-9]+)\s+4\s+160b\s+pmf-0\s+[0-9]+\s+[0-9]+\s+(?P<db_id>[0-9]+)\s+INGRESS_ACL_L3_IPV4\s*$'
+        where:
+          - field: npu
+            equals: '0'
+        deduplicate_by:
+          - npu
+          - db_id
+
+  - id: inspect_fia_acl_table
+    for_each:
+      in: ingress_acl_databases
+      steps:
+        - id: inspect_fia_db
+          run:
+            command: 'show controllers fia diagshell 0 "diag field T db={{.db_id}}"'
+            location:
+              - 0/0/CPU0
+
+  # These two commands were requested by the ACL development team. They are
+  # intentionally top-level because they do not depend on a particular DB-ID
+  # record. The current Command times/interval fields repeat one command;
+  # future command-group support should allow both commands to be repeated as
+  # one unit.
+  - id: inspect_fia_irpp_signature_block
+    run:
+      command: 'show controllers fia diagshell 0 "diag pp sig block=irpp"'
+      times: 5
+      interval: 2
+      location:
+        - 0/0/CPU0
+
+  - id: inspect_fia_last_field
+    run:
+      command: 'show controllers fia diagshell 0 "diag field last"'
+      times: 5
+      interval: 2
+      location:
+        - 0/0/CPU0

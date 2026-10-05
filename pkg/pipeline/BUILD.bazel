@@ -1,0 +1,29 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+package(default_visibility = ["//visibility:public"])
+
+go_library(
+    name = "pipeline",
+    srcs = [
+        "pipeline.go",
+        "extract.go",
+    ],
+    importpath = "github.com/sbezverk/routercommander/pkg/pipeline",
+    deps = [
+        "//pkg/messenger:messenger",
+        "//pkg/types:types",
+    ],
+)
+
+go_test(
+    name = "pipeline_test",
+    srcs = [
+        "extract_test.go",
+        "pipeline_test.go",
+    ],
+    embed = [":pipeline"],
+    deps = [
+        "//pkg/log:log",
+        "//pkg/types:types",
+    ],
+)

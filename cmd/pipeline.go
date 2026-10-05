@@ -10,23 +10,14 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/sbezverk/routercommander/pkg/messenger"
+	"github.com/sbezverk/routercommander/pkg/pipeline"
 	"github.com/sbezverk/routercommander/pkg/types"
 )
 
 func process(r types.Router, commander *types.Commander, n messenger.Notifier) error {
-	iterations := 1
-	interval := 0
-	stopWhenTriggered := true
-	if commander.Repro != nil {
-		if commander.Repro.Times > 0 {
-			iterations = commander.Repro.Times
-		}
-		if commander.Repro.Interval > 0 {
-			interval = commander.Repro.Interval
-		}
-		stopWhenTriggered = commander.Repro.StopWhenTriggered
+	if commander == nil {
+		return fmt.Errorf("commander is nil")
 	}
-	glog.Infof("router %s: command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
 	// Setting up the notification to be sent at the end of execution
 	defer func() {
 		li := r.GetLogger()
@@ -47,38 +38,64 @@ func process(r types.Router, commander *types.Commander, n messenger.Notifier) e
 		}
 		r.Close()
 	}()
-	triggered := false
-	var err error
-	for it := 0; it < iterations; it++ {
-		if iterations > 1 {
-			glog.Infof("router %s: executing iteration - %d/%d", r.GetName(), it+1, iterations)
+	// Selection point whether to execute MainCommandGroup or Pipeline
+	switch {
+	case len(commander.MainCommandGroup) > 0 && len(commander.Pipeline) > 0:
+		return fmt.Errorf("router %s: both commands and pipeline are defined", r.GetName())
+	case len(commander.MainCommandGroup) > 0:
+		iterations := 1
+		interval := 0
+		stopWhenTriggered := true
+		if commander.Repro != nil {
+			if commander.Repro.Times > 0 {
+				iterations = commander.Repro.Times
+			}
+			if commander.Repro.Interval > 0 {
+				interval = commander.Repro.Interval
+			}
+			stopWhenTriggered = commander.Repro.StopWhenTriggered
 		}
-		if triggered, err = processMainGroupOfCommands(r, commander, it); err != nil {
-			return fmt.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
-		}
-		if triggered {
-			// If the issue was triggered, collecting common Repro.PostMortemCommandGroup commands needed to troubleshooting
-			glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
-			for _, c := range commander.Repro.PostMortemCommandGroup {
-				_, err := r.ProcessCommand(c, true)
-				if err != nil {
-					return fmt.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+		glog.Infof("router %s: command set will be executed %d time(s) with the interval of %d seconds", r.GetName(), iterations, interval)
+		triggered := false
+		var err error
+		for it := 0; it < iterations; it++ {
+			if iterations > 1 {
+				glog.Infof("router %s: executing iteration - %d/%d", r.GetName(), it+1, iterations)
+			}
+			if triggered, err = processMainGroupOfCommands(r, commander, it); err != nil {
+				return fmt.Errorf("router %s: reported repro failure with error: %+v", r.GetName(), err)
+			}
+			if triggered {
+				// If the issue was triggered, collecting common Repro.PostMortemCommandGroup commands needed to troubleshooting
+				glog.Infof("repro process on router %s succeeded triggering the failure condition, collecting post-mortem commands...", r.GetName())
+				for _, c := range commander.Repro.PostMortemCommandGroup {
+					_, err := r.ProcessCommand(c, true)
+					if err != nil {
+						return fmt.Errorf("router %s: failed to process command %q with error %+v", r.GetName(), c.Cmd, err)
+					}
+				}
+				if stopWhenTriggered {
+					break
 				}
 			}
-			if stopWhenTriggered {
-				break
+			glog.Infof("router %s: iteration - %d/%d completed,", r.GetName(), it+1, iterations)
+			types.Delay(interval)
+		}
+		if commander.Repro != nil {
+			if triggered {
+				glog.Infof("repro process on router %s succeeded triggering the failure condition", r.GetName())
+			} else {
+				glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
 			}
 		}
-		glog.Infof("router %s: iteration - %d/%d completed,", r.GetName(), it+1, iterations)
-		types.Delay(interval)
-	}
-	if commander.Repro != nil {
-		if triggered {
-			glog.Infof("repro process on router %s succeeded triggering the failure condition", r.GetName())
-		} else {
-			glog.Infof("router %s: repro process has not succeeded triggering the failure condition", r.GetName())
+	case len(commander.Pipeline) > 0:
+		if err := pipeline.ExecutePipeline(r, commander, n); err != nil {
+			return fmt.Errorf("router %s: failed to execute pipeline with error %+v", r.GetName(), err)
 		}
+	default:
+		return fmt.Errorf("router %s: no commands and no pipeline to process", r.GetName())
 	}
+
 	return nil
 }
 
@@ -201,18 +218,16 @@ func runTest(results []*types.CmdResult, t *types.Test, iteration int) (bool, er
 			continue
 		}
 		if t.Pattern.RegExp == nil {
-			// By some reason regular expression has not been initialized, attempting to compile it
-			p, err := regexp.Compile(t.Pattern.PatternString)
-			if err != nil {
-				glog.Warningf("Fail to compile regular experssion for command %s test id %d with error: %+v", re.Cmd, t.ID, err)
-				continue
+			// Patterns normally get compiled while loading the command file. Keep
+			// this fallback for tests and callers that construct Test values
+			// programmatically instead of going through the loader.
+			if err := t.Pattern.Compile(); err != nil {
+				return false, fmt.Errorf("failed to compile pattern %q: %w", t.Pattern.PatternString, err)
 			}
-			t.Pattern.RegExp = p
 		}
-		p := t.Pattern.RegExp
-		matches := p.FindAllIndex(re.Result, -1)
+		matches := t.Pattern.RegExp.FindAllIndex(re.Result, -1)
 		if matches == nil {
-			glog.Warningf("Test ID: %d Command: %q pattern %q is not found", t.ID, re.Cmd, p.String())
+			glog.Warningf("Test ID: %d Command: %q pattern %q is not found", t.ID, re.Cmd, t.Pattern.RegExp.String())
 			continue
 		}
 		// Test the number of hits of the patter, if does not match, considered the issue triggered
