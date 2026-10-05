@@ -13,6 +13,9 @@ func ExecutePipeline(r types.Router, commander *types.Commander, n messenger.Not
 	runCtx := NewRunContext(r, commander)
 
 	if err := executePipeline(r, commander.Pipeline, runCtx); err != nil {
+		if errors.Is(err, types.ErrPipelineNoData) {
+			return nil
+		}
 		return err
 	}
 
@@ -83,6 +86,9 @@ func executeStep(
 		for _, record := range records {
 			childCtx := ctx.ChildForRecord(record)
 			if err := executePipeline(r, step.ForEach.Steps, childCtx); err != nil {
+				if errors.Is(err, types.ErrPipelineNoData) {
+					return err
+				}
 				if errors.Is(err, types.ErrPipelineSkipRecord) {
 					continue
 				}
@@ -112,6 +118,10 @@ func executeStep(
 				return skipRecordError(ctx, step, err)
 			}
 			return stepError(ctx, step, err)
+		}
+		if len(results) == 0 {
+			// Command returned no results, nothing to process.
+			return types.ErrPipelineNoData
 		}
 		if (*ctx.CommandsRun)+len(results) > ctx.MaxCommands {
 			if step.OnError == types.OnErrorTypeContinueRecord {

@@ -183,6 +183,19 @@ func cloneRenderData(data map[string]any) map[string]any {
 	return newData
 }
 
+func appendNonEmptyResults(results []*CmdResult, rs []*CmdResult) []*CmdResult {
+	for _, r := range rs {
+		if r == nil {
+			continue
+		}
+		if len(r.Result) == 0 {
+			continue
+		}
+		results = append(results, r)
+	}
+	return results
+}
+
 func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult, error) {
 	c := cmd.Cmd
 	results := make([]*CmdResult, 0)
@@ -211,6 +224,9 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			if err != nil {
 				return nil, err
 			}
+			if collectResult {
+				results = appendNonEmptyResults(results, rs)
+			}
 		} else {
 			renderData := cloneRenderData(cmd.runtimeRenderData)
 			rendered, err := cmd.Render(renderData)
@@ -227,7 +243,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			}
 		}
 		if collectResult {
-			results = append(results, rs...)
+			results = appendNonEmptyResults(results, rs)
 		}
 	} else {
 		locs, err := prepareLocations(r, cmd)
@@ -239,7 +255,7 @@ func (r *router) ProcessCommand(cmd *Command, collectResult bool) ([]*CmdResult,
 			return nil, err
 		}
 		if collectResult {
-			results = append(results, rs...)
+			results = appendNonEmptyResults(results, rs)
 		}
 	}
 	if cmd.WaitAfter != 0 {

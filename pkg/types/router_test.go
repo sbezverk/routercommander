@@ -37,6 +37,28 @@ type chunkReader struct {
 	chunks [][]byte
 }
 
+func TestAppendNonEmptyResults(t *testing.T) {
+	whitespace := []byte("\n")
+	data := []byte("output")
+
+	results := appendNonEmptyResults(nil, []*CmdResult{
+		nil,
+		&CmdResult{},
+		&CmdResult{Result: whitespace},
+		&CmdResult{Result: data},
+	})
+
+	if len(results) != 2 {
+		t.Fatalf("retained %d results, want 2", len(results))
+	}
+	if string(results[0].Result) != string(whitespace) {
+		t.Fatalf("first retained result = %q, want whitespace payload retained", results[0].Result)
+	}
+	if string(results[1].Result) != string(data) {
+		t.Fatalf("second retained result = %q, want %q", results[1].Result, data)
+	}
+}
+
 func (r *chunkReader) Read(p []byte) (int, error) {
 	if len(r.chunks) == 0 {
 		return 0, io.EOF

@@ -10,7 +10,9 @@ import (
 )
 
 type testRouter struct {
-	commands int
+	commands   int
+	commandIDs []string
+	results    map[string][]*types.CmdResult
 }
 
 func (r *testRouter) IsExistingLocation(string) bool { return false }
@@ -24,8 +26,14 @@ func (r *testRouter) GetData(string, bool, int) ([]byte, error) {
 }
 func (r *testRouter) ProcessCommand(cmd *types.Command, collectResult bool) ([]*types.CmdResult, error) {
 	r.commands++
+	r.commandIDs = append(r.commandIDs, cmd.Cmd)
 	if !collectResult {
 		return nil, nil
+	}
+	if r.results != nil {
+		if results, ok := r.results[cmd.Cmd]; ok {
+			return results, nil
+		}
 	}
 	return []*types.CmdResult{{Cmd: cmd.Cmd, Result: []byte("output")}}, nil
 }
@@ -80,6 +88,74 @@ func TestExecuteStepAppendsRepeatedStepResults(t *testing.T) {
 	}
 	if commandsRun != 2 {
 		t.Fatalf("CommandsRun = %d, want 2", commandsRun)
+	}
+}
+
+func TestExecutePipelineStopsAfterNoData(t *testing.T) {
+	router := &testRouter{
+		results: map[string][]*types.CmdResult{
+			"discover": {},
+		},
+	}
+	commander := &types.Commander{
+		Pipeline: []*types.PipelineStep{
+			{
+				ID: "discover",
+				Run: &types.Command{
+					Cmd:      "discover",
+					Location: []string{"0/0/CPU0"},
+				},
+			},
+			{
+				ID:  "dependent",
+				Run: &types.Command{Cmd: "dependent"},
+			},
+		},
+	}
+
+	if err := ExecutePipeline(router, commander, nil); err != nil {
+		t.Fatalf("ExecutePipeline returned unexpected error: %v", err)
+	}
+	if router.commands != 1 {
+		t.Fatalf("router received %d commands, want only the discovery command", router.commands)
+	}
+	if len(router.commandIDs) != 1 || router.commandIDs[0] != "discover" {
+		t.Fatalf("commands executed after no-data stop: %v", router.commandIDs)
+	}
+}
+
+func TestExecuteStepNoDataStopsEntireForEachPipeline(t *testing.T) {
+	commandsRun := 0
+	ctx := &types.RunContext{
+		RouterName:  "router-1",
+		Variables:   map[string]string{},
+		Collections: map[string][]types.Record{"targets": {{"id": "one"}, {"id": "two"}}},
+		StepResults: map[string][]types.StepResult{},
+		MaxDepth:    8,
+		CommandsRun: &commandsRun,
+		MaxCommands: 10,
+	}
+	router := &testRouter{
+		results: map[string][]*types.CmdResult{
+			"inspect": {},
+		},
+	}
+	step := &types.PipelineStep{
+		ID: "iterate",
+		ForEach: &types.PipelineForEach{
+			In: "targets",
+			Steps: []*types.PipelineStep{
+				{ID: "inspect", Run: &types.Command{Cmd: "inspect"}},
+			},
+		},
+	}
+
+	err := executeStep(router, step, ctx)
+	if !errors.Is(err, types.ErrPipelineNoData) {
+		t.Fatalf("executeStep error = %v, want ErrPipelineNoData", err)
+	}
+	if router.commands != 1 {
+		t.Fatalf("router received %d commands, want processing to stop at the first record", router.commands)
 	}
 }
 
