@@ -1,0 +1,166 @@
+# Manual Stage 2 template for the FIB-ENCAP-IDA workflow.
+#
+# Replace the {{.placeholder}} values with evidence extracted from Stage 1
+# before execution. This file is not runnable as-is: the current pipeline
+# cannot publish Stage 1 values into a global scalar pool, correlate multiple
+# independent collections, or conditionally start Stage 2.
+#
+# address_family must be either ipv4 or ipv6.
+
+pipeline_limits:
+  max_depth: 8
+  max_commands: 5000
+
+pipeline:
+  - id: stage2_encap_id_detail
+    run:
+      command: show cef encap-id {{.encap_id}} detail
+
+  # Produces one record for each displayed PATHLIST under Conflict objects or
+  # NonConflict objects. The section name is captured as pathlist_class so
+  # later classification can distinguish the two records.
+  - id: extract_encap_detail_pathlists
+    extract:
+      from_step_id: stage2_encap_id_detail
+      context:
+        - pattern:
+            pattern_string: '^Encap id:\s*(?P<encap_id>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*(?P<pathlist_class>Conflict|NonConflict) objects:\s*$'
+        - pattern:
+            pattern_string: '^\s*PATHLIST\s+pl:(?P<detail_pathlist_ptr>0x[0-9A-Fa-f]+)\s+paths:(?P<detail_paths>[0-9]+)\s+pl-type:(?P<detail_pl_type>\S+)\s+refcnt:(?P<detail_refcnt>[0-9]+)(?:\s+retry reason:(?P<detail_retry_reason>\S+))?\s*$'
+      record_spec:
+        name: encap_detail_pathlists
+        pattern:
+          pattern_string: '^\s*1st prefix dependent:\s+(?P<detail_vrf>[A-Za-z0-9_.:-]+)\s+(?P<detail_vrfid>0x[0-9A-Fa-f]+)\s+(?P<detail_prefix>[0-9A-Fa-f:.]+/\d+)\s+leaf:(?P<detail_leaf>0x[0-9A-Fa-f]+)\s*$'
+        inherit:
+          - encap_id
+          - pathlist_class
+          - detail_pathlist_ptr
+          - detail_paths
+          - detail_pl_type
+          - detail_refcnt
+          - detail_retry_reason
+        deduplicate_by:
+          - pathlist_class
+          - detail_pathlist_ptr
+          - detail_vrf
+          - detail_prefix
+
+  - id: extract_encap_detail_object
+    extract:
+      from_step_id: stage2_encap_id_detail
+      context:
+        - pattern:
+            pattern_string: '^Encap id:\s*(?P<encap_id>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*ptr:\s+(?P<encap_object_ptr>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*obj type:\s+(?P<encap_object_type>[A-Z0-9_]+),\s+flags:\s+(?P<encap_flags>0x[0-9A-Fa-f]+),\s+refcnt:\s+(?P<encap_refcnt>[0-9]+)\s*$'
+      record_spec:
+        name: encap_detail_objects
+        pattern:
+          pattern_string: '^\s*update time\s+(?P<encap_update_time>.+?)\s*$'
+        inherit:
+          - encap_id
+          - encap_object_ptr
+          - encap_object_type
+          - encap_flags
+          - encap_refcnt
+        deduplicate_by:
+          - encap_id
+          - encap_object_ptr
+
+  - id: stage2_trace
+    run:
+      command: show cef trace location {{.location}}
+      pipe_modifier: 'include "PATHLIST conflict|path_info_init"'
+
+  - id: stage2_conflicting_bgp_detail
+    run:
+      command: show bgp vrf {{.vrf}} {{.address_family}} unicast {{.conflicting_prefix}} detail
+
+  - id: extract_conflicting_bgp_paths
+    extract:
+      from_step_id: stage2_conflicting_bgp_detail
+      context:
+        - pattern:
+            pattern_string: '^BGP routing table entry for (?P<bgp_route_prefix>[0-9A-Fa-f:.]+/\d+), Route Distinguisher: (?P<bgp_route_rd>\S+)\s*$'
+        - pattern:
+            pattern_string: '^\s*Path #(?P<bgp_path_number>[0-9]+):.*$'
+        - pattern:
+            pattern_string: '^\s*Flags:\s+(?P<path_flags>[^,]+),\s+import:\s+(?P<import_flags>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*(?P<bgp_next_hop>[0-9A-Fa-f:.]+)\s+\(metric\s+(?P<bgp_metric>[0-9]+)\)\s+from\s+(?P<peer_address>[0-9A-Fa-f:.]+)\s+\((?P<peer_router_id>[0-9A-Fa-f:.]+)\),\s+if-handle\s+(?P<if_handle>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*Received Label\s+(?P<received_label>[0-9]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*(?P<path_attributes>Origin\s+.+)\s*$'
+        - pattern:
+            pattern_string: '^\s*Received Path ID\s+(?P<received_path_id>[0-9]+),\s+Local Path ID\s+(?P<local_path_id>[0-9]+),\s+version\s+(?P<path_version>[0-9]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*Extended community:\s+(?P<extended_community>.+?)\s*$'
+        - pattern:
+            pattern_string: '^\s*\((?P<link_bandwidth_detail>LB non-transitive AS:bytes/sec:(?P<link_bandwidth_as>[0-9]+):(?P<link_bandwidth_bytes_per_sec>[0-9.]+))\)\s*$'
+      record_spec:
+        name: conflicting_bgp_paths
+        pattern:
+          pattern_string: '^\s*Source AFI:\s+(?P<source_afi>[^,]+),\s+Source VRF:\s+(?P<source_vrf>[^,]+),\s+Source Route Distinguisher:\s+(?P<source_rd>\S+)\s*$'
+        inherit:
+          - bgp_route_prefix
+          - bgp_route_rd
+          - bgp_path_number
+          - path_flags
+          - import_flags
+          - bgp_next_hop
+          - bgp_metric
+          - peer_address
+          - peer_router_id
+          - if_handle
+          - received_label
+          - path_attributes
+          - received_path_id
+          - local_path_id
+          - path_version
+          - extended_community
+          - link_bandwidth_detail
+          - link_bandwidth_as
+          - link_bandwidth_bytes_per_sec
+        deduplicate_by:
+          - bgp_path_number
+          - bgp_next_hop
+          - source_vrf
+          - source_rd
+
+  - id: stage2_conflicting_route_detail
+    run:
+      command: show route vrf {{.vrf}} {{.address_family}} {{.conflicting_prefix}} detail
+
+  - id: stage2_conflicting_cef_detail
+    run:
+      command: show cef vrf {{.vrf}} {{.address_family}} {{.conflicting_prefix}} detail
+
+  - id: stage2_conflicting_cef_internal
+    run:
+      command: show cef vrf {{.vrf}} {{.address_family}} {{.conflicting_prefix}} internal
+
+  - id: stage2_non_conflicting_bgp_detail
+    run:
+      command: show bgp vrf {{.vrf}} {{.address_family}} unicast {{.non_conflicting_prefix}} detail
+
+  - id: stage2_non_conflicting_route_detail
+    run:
+      command: show route vrf {{.vrf}} {{.address_family}} {{.non_conflicting_prefix}} detail
+
+  - id: stage2_non_conflicting_cef_detail
+    run:
+      command: show cef vrf {{.vrf}} {{.address_family}} {{.non_conflicting_prefix}} detail
+
+  - id: stage2_non_conflicting_cef_internal
+    run:
+      command: show cef vrf {{.vrf}} {{.address_family}} {{.non_conflicting_prefix}} internal
+
+# The prompt requests relevant BGP VRF address-family configuration, including
+# maximum-paths/unequal-cost, label mode, and applied policies. The exact
+# supported show command was not specified, so it is intentionally omitted
+# rather than invented. Add the platform-approved command manually.

@@ -26,7 +26,7 @@ pipeline:
       record_spec:
         name: prefixes
         pattern:
-          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)\s*$'
+          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:<[^>]+>)?\s*$'
         inherit:
           - vrf
         deduplicate_by:
@@ -43,13 +43,13 @@ pipeline:
         # address/prefix tokens prevents continuation rows from replacing the
         # current prefix with a next-hop value.
         - pattern:
-            pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)\s*$'
+            pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:<[^>]+>)?\s*$'
       record_spec:
         name: next_hops
         pattern:
           # The prefix is optional so this matches both the first row and
           # continuation rows in the output.
-          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)\s*$'
+          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)(?:<[^>]+>)?\s*$'
         inherit:
           - vrf
           - prefix

@@ -214,6 +214,128 @@ func TestPipelineValidationRejectsRenderFieldCollisions(t *testing.T) {
 	}
 }
 
+func TestBranchPredicateFieldValidation(t *testing.T) {
+	stringValue := func(value string) *string { return &value }
+
+	branch := func(predicate *Predicate) *PipelineStep {
+		return &PipelineStep{
+			ID: "classify",
+			Branch: &PipelineBranch{
+				Cases: []*PipelineCase{{
+					When:  predicate,
+					Steps: []*PipelineStep{pipelineTestRun("matched")},
+				}},
+			},
+		}
+	}
+
+	base := func(predicate *Predicate) []*PipelineStep {
+		return []*PipelineStep{
+			pipelineTestRun("discover"),
+			pipelineTestExtract(
+				"extract",
+				"discover",
+				"records",
+				`^(?P<value>\S+)$`,
+				`^(?P<field_1>\S+)\s+(?P<field_2>\S+)$`,
+				nil,
+			),
+			branch(predicate),
+		}
+	}
+
+	tests := []struct {
+		name      string
+		predicate *Predicate
+		wantErr   bool
+	}{
+		{
+			name:      "known simple field",
+			predicate: &Predicate{Field: "field_1", Equals: stringValue("value")},
+		},
+		{
+			name:      "unknown simple field",
+			predicate: &Predicate{Field: "missing", Equals: stringValue("value")},
+			wantErr:   true,
+		},
+		{
+			name: "known all fields",
+			predicate: &Predicate{All: []*Predicate{
+				{Field: "field_1", Exists: boolPointer(true)},
+				{Field: "field_2", Exists: boolPointer(true)},
+			}},
+		},
+		{
+			name: "unknown field nested in all",
+			predicate: &Predicate{All: []*Predicate{
+				{Field: "field_1", Exists: boolPointer(true)},
+				{Field: "missing", Exists: boolPointer(true)},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "any validates every child",
+			predicate: &Predicate{Any: []*Predicate{
+				{Field: "field_1", Equals: stringValue("value")},
+				{Field: "missing", Equals: stringValue("value")},
+			}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err, _ := validateTestPipeline(base(tt.predicate))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateTestPipeline() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBranchCanBeFirstChildOfForEach(t *testing.T) {
+	steps := []*PipelineStep{
+		pipelineTestRun("discover"),
+		pipelineTestExtract("extract", "discover", "records", `(?P<field_1>\S+)`, "", nil),
+		{
+			ID: "iterate",
+			ForEach: &PipelineForEach{
+				In: "records",
+				Steps: []*PipelineStep{{
+					ID: "classify",
+					Branch: &PipelineBranch{
+						Cases: []*PipelineCase{{
+							When:  &Predicate{Field: "field_1", Exists: boolPointer(true)},
+							Steps: []*PipelineStep{pipelineTestRun("matched")},
+						}},
+					},
+				}},
+			},
+		},
+	}
+
+	if err, _ := validateTestPipeline(steps); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestDefaultOnlyBranchDoesNotRequirePrecedingExtraction(t *testing.T) {
+	steps := []*PipelineStep{{
+		ID: "default_branch",
+		Branch: &PipelineBranch{
+			Default: []*PipelineStep{pipelineTestRun("default")},
+		},
+	}}
+
+	if err, _ := validateTestPipeline(steps); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
+}
+
 func TestPipelineValidationPoliciesLimitsAndTemplates(t *testing.T) {
 	ambiguousProfile := &Commander{
 		MainCommandGroup: []*Command{{Cmd: "show platform"}},

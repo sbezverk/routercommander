@@ -130,13 +130,24 @@ func (r *router) GetAllRPs() []string {
 
 func (r *router) GetAllLocations() []string {
 	locations := make([]string, 0)
+	seen := make(map[string]struct{})
+	appendUnique := func(values []string) {
+		for _, location := range values {
+			if _, found := seen[location]; found {
+				continue
+			}
+			seen[location] = struct{}{}
+			locations = append(locations, location)
+		}
+	}
+
 	rps := r.GetAllRPs()
 	if rps != nil {
-		locations = append(locations, rps...)
+		appendUnique(rps)
 	}
 	lcs := r.GetAllLCs()
 	if lcs != nil {
-		locations = append(locations, lcs...)
+		appendUnique(lcs)
 	}
 
 	return locations

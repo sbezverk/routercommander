@@ -10,9 +10,10 @@ import (
 )
 
 type testRouter struct {
-	commands   int
-	commandIDs []string
-	results    map[string][]*types.CmdResult
+	commands      int
+	commandIDs    []string
+	results       map[string][]*types.CmdResult
+	commandErrors map[string]error
 }
 
 func (r *testRouter) IsExistingLocation(string) bool { return false }
@@ -27,6 +28,11 @@ func (r *testRouter) GetData(string, bool, int) ([]byte, error) {
 func (r *testRouter) ProcessCommand(cmd *types.Command, collectResult bool) ([]*types.CmdResult, error) {
 	r.commands++
 	r.commandIDs = append(r.commandIDs, cmd.Cmd)
+	if r.commandErrors != nil {
+		if err, ok := r.commandErrors[cmd.Cmd]; ok {
+			return nil, err
+		}
+	}
 	if !collectResult {
 		return nil, nil
 	}

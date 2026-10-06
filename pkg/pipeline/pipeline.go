@@ -103,7 +103,18 @@ func executeStep(
 	}
 
 	if step.Branch != nil {
-		return fmt.Errorf("branch execution not implemented")
+		if err := executeBranch(r, step.ID, step.Branch, ctx); err != nil {
+			if childErr, ok := unwrapBranchChildError(err); ok {
+				return childErr
+			}
+			if errors.Is(err, types.ErrPipelineNoData) || errors.Is(err, types.ErrPipelineSkipRecord) {
+				return err
+			}
+			if step.OnError == types.OnErrorTypeContinueRecord {
+				return skipRecordError(ctx, step, err)
+			}
+			return stepError(ctx, step, err)
+		}
 	}
 	if step.Run != nil {
 		renderData := buildRenderData(ctx)

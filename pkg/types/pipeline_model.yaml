@@ -49,29 +49,30 @@ pipeline:
               - all
           on_error: continue_record
 
-  # Branching is a standalone step. Each branch step has its own ID.
-  - id: classify_route
-    branch:
-      cases:
-        - when:
-            field: field_1
-            equals: blah
-          steps:
-            - id: run_command_two
-              run:
-                command: show command-two
+  # Branching within a for_each step, checking variables collected by record spec "route",
+  # each branch step has its own ID.
+        - id: classify_route
+          branch:
+            cases:
+              - when:
+                  field: prefix
+                  equals: blah
+                steps:
+                  - id: run_command_two
+                    run:
+                      command: show command-two
 
-        - when:
-            field: field_1
-            equals: halb
-          steps:
-            - id: run_command_three
-              run:
-                command: show command-three
-      default:
-        - id: run_default_command
-          run:
-            command: show command-default
+              - when:
+                  field: prefix
+                  equals: halb
+                steps:
+                  - id: run_command_three
+                    run:
+                      command: show command-three
+            default:
+              - id: run_default_command
+                run:
+                  command: show command-default
 
   # Recursive processing: each level is represented by separate run,
   # extract, and for_each steps.

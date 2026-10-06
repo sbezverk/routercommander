@@ -138,6 +138,23 @@ func TestPrepareLocationsExpandsSelectors(t *testing.T) {
 	}
 }
 
+func TestGetAllLocationsDoesNotDuplicateRPsWhenNoLCs(t *testing.T) {
+	r := &router{
+		platform: &platform{
+			rps: &rps{rps: map[string]*rp{
+				"0/RP0/CPU0": {location: "0/RP0/CPU0"},
+			}},
+			lcs: &lcs{lcs: map[string]*lc{}},
+		},
+	}
+
+	got := r.GetAllLocations()
+	want := []string{"0/RP0/CPU0"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected locations: got %v, want %v", got, want)
+	}
+}
+
 func TestCloneForRunCreatesIndependentRouterCommandState(t *testing.T) {
 	commands := &Commander{
 		MainCommandGroup: []*Command{

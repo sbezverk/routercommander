@@ -32,16 +32,17 @@ type StepResult struct {
 
 // RunContext contains the per-router state shared while a pipeline executes.
 type RunContext struct {
-	Variables   map[string]string       // Scalar values available to templates.
-	Collections map[string][]Record     // Extracted records keyed by collection name.
-	StepResults map[string][]StepResult // Results of executed steps.
-	Current     Record                  // Record currently processed by a for-each step.
-	RouterName  string                  // Router owning this pipeline invocation.
-	Depth       int                     // Current recursive step depth.
-	StepPath    []string                // IDs of nested steps currently executing.
-	MaxDepth    int                     // Maximum permitted recursive depth.
-	CommandsRun *int                    // Number of generated commands executed so far.
-	MaxCommands int                     // Maximum permitted generated commands.
+	Variables     map[string]string       // Scalar values available to templates.
+	Collections   map[string][]Record     // Extracted records keyed by collection name.
+	StepResults   map[string][]StepResult // Results of executed steps.
+	Current       Record                  // Record currently processed by a for-each step.
+	InRecordScope bool                    // True while executing steps for one for-each record.
+	RouterName    string                  // Router owning this pipeline invocation.
+	Depth         int                     // Current recursive step depth.
+	StepPath      []string                // IDs of nested steps currently executing.
+	MaxDepth      int                     // Maximum permitted recursive depth.
+	CommandsRun   *int                    // Number of generated commands executed so far.
+	MaxCommands   int                     // Maximum permitted generated commands.
 }
 
 func (ctx *RunContext) ChildForRecord(record Record) *RunContext {
@@ -49,6 +50,7 @@ func (ctx *RunContext) ChildForRecord(record Record) *RunContext {
 
 	child.Variables = maps.Clone(ctx.Variables)
 	child.Current = maps.Clone(record)
+	child.InRecordScope = true
 	child.Collections = maps.Clone(ctx.Collections)
 	child.StepPath = append([]string(nil), ctx.StepPath...)
 	child.StepResults = maps.Clone(ctx.StepResults)

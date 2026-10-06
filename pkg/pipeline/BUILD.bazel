@@ -7,17 +7,20 @@ go_library(
     srcs = [
         "pipeline.go",
         "extract.go",
+        "branch.go",
     ],
     importpath = "github.com/sbezverk/routercommander/pkg/pipeline",
     deps = [
         "//pkg/messenger:messenger",
         "//pkg/types:types",
+        "@com_github_golang_glog//:go_default_library",
     ],
 )
 
 go_test(
     name = "pipeline_test",
     srcs = [
+        "branch_test.go",
         "extract_test.go",
         "pipeline_test.go",
     ],

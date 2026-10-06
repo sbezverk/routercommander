@@ -191,11 +191,17 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 			if len(step.Branch.Cases) == 0 && len(step.Branch.Default) == 0 {
 				return fmt.Errorf("Branch step must have at least one case or a default branch"), nil
 			}
-			for _, c := range step.Branch.Cases {
+			for caseIndex, c := range step.Branch.Cases {
 				if len(c.Steps) == 0 {
 					continue
 				}
+				if c.When == nil {
+					return fmt.Errorf("Branch case must have a 'when' condition"), nil
+				}
 				child := childContext(ctx)
+				if err := validatePredicateFields(child.pipelineSymbols.contextFields, c.When, ""); err != nil {
+					return fmt.Errorf("branch step %q case %d predicate validation failed: %w", step.ID, caseIndex, err), nil
+				}
 				if err, s := doPipelineStepValidation(c.Steps, child); err != nil {
 					return fmt.Errorf("Branch case validation failed: %v", err), nil
 				} else {
@@ -252,4 +258,50 @@ func isReservedPipelineRenderField(field string) bool {
 	default:
 		return false
 	}
+}
+
+func validatePredicateFields(symbols map[string]struct{}, predicate *Predicate, path string) error {
+	if predicate == nil {
+		return fmt.Errorf("predicate is nil")
+	}
+	if predicate.All != nil {
+		if len(predicate.All) == 0 {
+			return fmt.Errorf("all predicate has no children")
+		}
+		for i, child := range predicate.All {
+			childPath := predicateChildPath(path, "all", i)
+			if err := validatePredicateFields(symbols, child, childPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if predicate.Any != nil {
+		if len(predicate.Any) == 0 {
+			return fmt.Errorf("any predicate has no children")
+		}
+		for i, child := range predicate.Any {
+			childPath := predicateChildPath(path, "any", i)
+			if err := validatePredicateFields(symbols, child, childPath); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if _, ok := symbols[predicate.Field]; !ok {
+		if path == "" {
+			path = "root"
+		}
+		return fmt.Errorf("predicate %q references unavailable field %q", path, predicate.Field)
+	}
+	return nil
+}
+
+func predicateChildPath(parent, operator string, index int) string {
+	child := fmt.Sprintf("%s[%d]", operator, index)
+	if parent == "" {
+		return child
+	}
+	return parent + "." + child
 }
