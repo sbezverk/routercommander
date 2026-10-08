@@ -41,12 +41,23 @@ func extractRecords(
 	}
 
 	maxRecords := extraction.RecordSpec.MaxRecords
-	if maxRecords == 0 {
-		maxRecords = types.DefaultMaxRecords
-	}
 	if maxRecords < 0 {
 		return nil, fmt.Errorf("step id %s has a negative maximum number of records: %d", extraction.FromStepID, maxRecords)
 	}
+	if maxRecords == 0 {
+		maxRecords = func() int {
+			if ctx.MaxRecords > 0 {
+				return ctx.MaxRecords
+			}
+			return types.DefaultMaxRecords
+		}()
+	}
+	maxRecords = min(maxRecords, func() int {
+		if ctx.MaxRecords > 0 {
+			return ctx.MaxRecords
+		}
+		return types.DefaultMaxRecords
+	}())
 
 	records := make([]types.Record, 0)
 	for _, stepResult := range stepResults {

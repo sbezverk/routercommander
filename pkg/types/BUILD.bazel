@@ -29,6 +29,8 @@ go_test(
     srcs = [
         "model_test.go",
         "phase1_test.go",
+        "pipeline_export_test.go",
+        "pipeline_join_test.go",
         "pipeline_validation_test.go",
         "platform_test.go",
         "types_test.go",

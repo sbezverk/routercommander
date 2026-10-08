@@ -43,6 +43,7 @@ type RunContext struct {
 	MaxDepth      int                     // Maximum permitted recursive depth.
 	CommandsRun   *int                    // Number of generated commands executed so far.
 	MaxCommands   int                     // Maximum permitted generated commands.
+	MaxRecords    int                     // Maximum permitted records in a collection.
 }
 
 func (ctx *RunContext) ChildForRecord(record Record) *RunContext {
@@ -125,9 +126,6 @@ func (r *RecordSpec) Validate() error {
 	}
 	if r.MaxRecords < 0 {
 		return fmt.Errorf("Records 'max_records' field cannot be negative")
-	}
-	if r.MaxRecords == 0 {
-		r.MaxRecords = DefaultMaxRecords
 	}
 	if r.MaxRecords > MaximumRecords {
 		return fmt.Errorf("Records 'max_records' field cannot exceed %d", MaximumRecords)
@@ -344,13 +342,15 @@ type PipelineRun struct {
 }
 
 // PipelineStep is one executable or control-flow unit. Exactly one primary
-// operation should be set: Run, Extract, ForEach, or Branch.
+// operation should be set: Run, Extract, ForEach, Branch, Export, Join.
 type PipelineStep struct {
 	ID      string           `yaml:"id"`                 // Identifier used for references, logs, and step paths.
 	Run     *Command         `yaml:"run,omitempty"`      // Execute one command and retain its raw output.
 	Extract *PipelineExtract `yaml:"extract,omitempty"`  // Parse output from another run step into records.
 	ForEach *PipelineForEach `yaml:"for_each,omitempty"` // Iterate child steps over a named collection.
 	Branch  *PipelineBranch  `yaml:"branch,omitempty"`   // Select child steps using predicates.
+	Export  *PipelineExport  `yaml:"export,omitempty"`
+	Join    *PipelineJoin    `yaml:"join,omitempty"`
 	OnError string           `yaml:"on_error,omitempty"` // Failure policy applied to this step.
 }
 
@@ -362,7 +362,7 @@ func (ps *PipelineStep) Validate() error {
 		return fmt.Errorf("PipelineStep 'id' field cannot be empty")
 	}
 	if !isOnlyOneFunction(ps) {
-		return fmt.Errorf("PipelineStep must have exactly one of 'run', 'extract', 'for_each', or 'branch' defined")
+		return fmt.Errorf("PipelineStep must have exactly one of 'run', 'extract', 'for_each', 'branch', 'export', 'join' defined")
 	}
 	if ps.Run != nil {
 		if err := ps.Run.Validate(); err != nil {
@@ -382,6 +382,16 @@ func (ps *PipelineStep) Validate() error {
 	if ps.Branch != nil {
 		if err := ps.Branch.Validate(); err != nil {
 			return fmt.Errorf("PipelineStep 'branch' validation failed: %v", err)
+		}
+	}
+	if ps.Export != nil {
+		if err := ps.Export.Validate(); err != nil {
+			return fmt.Errorf("PipelineStep 'export' validation failed: %v", err)
+		}
+	}
+	if ps.Join != nil {
+		if err := ps.Join.Validate(); err != nil {
+			return fmt.Errorf("PipelineStep 'join' validation failed: %v", err)
 		}
 	}
 	ps.OnError = strings.ToLower(strings.TrimSpace(ps.OnError))
@@ -408,5 +418,110 @@ func isOnlyOneFunction(step *PipelineStep) bool {
 	if step.ForEach != nil {
 		count++
 	}
+	if step.Export != nil {
+		count++
+	}
+	if step.Join != nil {
+		count++
+	}
 	return count == 1
+}
+
+type PipelineExport struct {
+	From      string `yaml:"from"`
+	Field     string `yaml:"field"`
+	As        string `yaml:"as"`
+	Require   string `yaml:"require"` // one of: "exactly_one".
+	Overwrite bool   `yaml:"overwrite,omitempty"`
+}
+
+func (pe *PipelineExport) Validate() error {
+	if pe == nil {
+		return fmt.Errorf("PipelineExport object is nil")
+	}
+	pe.From = strings.TrimSpace(pe.From)
+	pe.Field = strings.TrimSpace(pe.Field)
+	pe.As = strings.TrimSpace(pe.As)
+	pe.Require = strings.TrimSpace(pe.Require)
+	if pe.From == "" {
+		return fmt.Errorf("PipelineExport 'from' field cannot be empty")
+	}
+	if pe.Field == "" {
+		return fmt.Errorf("PipelineExport 'field' field cannot be empty")
+	}
+	if IsReservedPipelineRenderField(pe.Field) {
+		return fmt.Errorf("PipelineExport 'field' field cannot reference reserved field: %s", pe.Field)
+	}
+	if pe.As == "" {
+		return fmt.Errorf("PipelineExport 'as' field cannot be empty")
+	}
+	if IsReservedPipelineRenderField(pe.As) {
+		return fmt.Errorf("PipelineExport 'as' field cannot reference reserved field: %s", pe.As)
+	}
+	if pe.Require == "" {
+		return fmt.Errorf("PipelineExport 'require' field cannot be empty")
+	}
+	switch pe.Require {
+	case "exactly_one":
+		// valid
+	default:
+		return fmt.Errorf("PipelineExport 'require' field must be one of: 'exactly_one'")
+	}
+
+	return nil
+}
+
+type PipelineJoin struct {
+	Left      string   `yaml:"left"`
+	Right     string   `yaml:"right"`
+	On        []string `yaml:"on"`
+	Output    string   `yaml:"output"`
+	Unmatched string   `yaml:"unmatched,omitempty"`
+}
+
+func (pj *PipelineJoin) Validate() error {
+	if pj == nil {
+		return fmt.Errorf("PipelineJoin object is nil")
+	}
+	pj.Left = strings.TrimSpace(pj.Left)
+	pj.Right = strings.TrimSpace(pj.Right)
+	pj.Output = strings.TrimSpace(pj.Output)
+	pj.Unmatched = strings.TrimSpace(pj.Unmatched)
+	if pj.Left == "" {
+		return fmt.Errorf("PipelineJoin 'left' field cannot be empty")
+	}
+	if pj.Right == "" {
+		return fmt.Errorf("PipelineJoin 'right' field cannot be empty")
+	}
+	if len(pj.On) == 0 {
+		return fmt.Errorf("PipelineJoin 'on' field cannot be empty")
+	}
+	if pj.Output == "" {
+		return fmt.Errorf("PipelineJoin 'output' field cannot be empty")
+	}
+	uniqueOn := make(map[string]struct{})
+	for i, on := range pj.On {
+		on = strings.TrimSpace(on)
+		if on == "" {
+			return fmt.Errorf("PipelineJoin 'on' field at index %d cannot be empty", i)
+		}
+		if IsReservedPipelineRenderField(on) {
+			return fmt.Errorf("PipelineJoin 'on' field cannot reference reserved field: %s", on)
+		}
+		if _, exists := uniqueOn[on]; exists {
+			return fmt.Errorf("PipelineJoin 'on' field contains duplicate: %s", on)
+		}
+		uniqueOn[on] = struct{}{}
+		pj.On[i] = on
+	}
+	switch pj.Unmatched {
+	case "ignore":
+	case "":
+		pj.Unmatched = "ignore"
+	case "error":
+	default:
+		return fmt.Errorf("PipelineJoin 'unmatched' field must be one of: 'ignore', 'error'")
+	}
+
+	return nil
 }

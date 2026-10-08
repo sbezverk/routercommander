@@ -1,5 +1,7 @@
 package types
 
+import "slices"
+
 // CloneForRun returns an independent command tree with fresh per-run result state.
 func (c *Commander) CloneForRun() *Commander {
 	if c == nil {
@@ -68,6 +70,24 @@ func clonePipelineStepForRun(step *PipelineStep) *PipelineStep {
 	out.Extract = clonePipelineExtractForRun(step.Extract)
 	out.ForEach = clonePipelineForEachForRun(step.ForEach)
 	out.Branch = clonePipelineBranchForRun(step.Branch)
+	out.Export = clonePipelineExportForRun(step.Export)
+	out.Join = clonePipelineJoinForRun(step.Join)
+	return &out
+}
+
+func clonePipelineExportForRun(export *PipelineExport) *PipelineExport {
+	if export == nil {
+		return nil
+	}
+	out := *export
+	return &out
+}
+func clonePipelineJoinForRun(join *PipelineJoin) *PipelineJoin {
+	if join == nil {
+		return nil
+	}
+	out := *join
+	out.On = slices.Clone(join.On)
 	return &out
 }
 

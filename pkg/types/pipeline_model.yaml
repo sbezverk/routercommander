@@ -1,6 +1,7 @@
 pipeline_limits:
   max_depth: 8
   max_commands: 5000
+  max_records: 500
 
 pipeline:
   # Discover unresolved routes.
@@ -127,3 +128,129 @@ pipeline:
                     - id: level_four_command
                       run:
                         command: show detail {{.third_value}}
+
+# ---------------------------------------------------------------------------
+# Proposed Phase 5A examples: export and keyed join
+# ---------------------------------------------------------------------------
+#
+# The following examples are intentionally commented out. The current
+# PipelineStep model supports run, extract, for_each, and branch. Export and
+# join are documented future operations from Phase 5A and are shown here for
+# visual reference without making this parser fixture invalid before those
+# operations are implemented.
+#
+# Both operations are pipeline-level transformations and must not be placed
+# inside a for_each block. They do not connect to a router and do not produce
+# StepResults; they transform data already collected in RunContext.
+
+# Example 1: publish one uniquely discovered value as a pipeline variable.
+#
+# Expected discovery output:
+#
+#   Hosting NPU: 0
+#
+# The `exactly_one` policy prevents an ambiguous result from silently using
+# the last record found.
+#
+# pipeline:
+#   - id: discover_hosting_npu
+#     run:
+#       command: show controller npu voq-usage interface TenGigE0/0/0/3/0
+#       location:
+#         - 0/0/CPU0
+#
+#   - id: extract_hosting_npu
+#     extract:
+#       from_step_id: discover_hosting_npu
+#       record_spec:
+#         name: hosting_npus
+#         pattern:
+#           pattern_string: '^\s*Hosting NPU:\s*(?P<npu>\d+)\s*$'
+#         deduplicate_by:
+#           - npu
+#
+#   - id: publish_hosting_npu
+#     export:
+#       from: hosting_npus
+#       field: npu
+#       as: hosting_npu
+#       require: exactly_one
+#
+#   - id: inspect_hosting_npu
+#     run:
+#       command: show controllers fia diagshell {{.hosting_npu}} "diag field last"
+#       location:
+#         - 0/0/CPU0
+
+# Example 2: correlate independently discovered NPU and ACL DB-ID records.
+#
+# The two source collections are joined by the shared `npu` key. The join
+# creates fresh records such as:
+#
+#   diagnostic_targets:
+#     - npu: "0"
+#       db_id: "32"
+#
+# `unmatched: ignore` creates an inner join and reports unmatched values in
+# diagnostics. A future stricter profile could select `unmatched: error`.
+#
+# pipeline:
+#   - id: discover_hosting_npus
+#     run:
+#       command: show controller npu voq-usage interface TenGigE0/0/0/3/0
+#       location:
+#         - 0/0/CPU0
+#
+#   - id: extract_hosting_npus
+#     extract:
+#       from_step_id: discover_hosting_npus
+#       record_spec:
+#         name: hosting_npus
+#         pattern:
+#           pattern_string: '^\s*Interface\s+(?P<interface>\S+)\s+NPU\s+(?P<npu>\d+)\s*$'
+#         deduplicate_by:
+#           - interface
+#           - npu
+#
+#   - id: discover_acl_db_entries
+#     run:
+#       command: show controllers npu internaltcam location 0/0/CPU0
+#       location:
+#         - 0/0/CPU0
+#
+#   - id: extract_acl_db_entries
+#     extract:
+#       from_step_id: discover_acl_db_entries
+#       record_spec:
+#         name: ingress_acl_entries
+#         pattern:
+#           pattern_string: '^\s*NPU\s+(?P<npu>\d+)\s+INGRESS_ACL_L3_IPV4\s+DB\s+(?P<db_id>\d+)\s*$'
+#         deduplicate_by:
+#           - npu
+#           - db_id
+#
+#   - id: correlate_fia_targets
+#     join:
+#       left: hosting_npus
+#       right: ingress_acl_entries
+#       on:
+#         - npu
+#       output: diagnostic_targets
+#       unmatched: ignore
+#
+#   - id: inspect_fia_targets
+#     for_each:
+#       in: diagnostic_targets
+#       steps:
+#         - id: inspect_fia_db
+#           run:
+#             command: show controllers fia diagshell {{.npu}} "diag field T db={{.db_id}}"
+#             location:
+#               - 0/0/CPU0
+
+# Scope reminder:
+# - export and join are not valid inside `for_each` in the initial design;
+# - collections created inside a for_each are child-local;
+# - an explicit collection-aggregation operation will be required if a
+#   later pipeline-level join must consume records created inside a loop; and
+# - automatic promotion of every extracted field into Variables is forbidden.

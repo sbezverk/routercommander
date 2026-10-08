@@ -26,6 +26,7 @@ func boolValue(value bool) *bool {
 
 func TestExtractRecordsPreservesContextAcrossLinesAndFinalLine(t *testing.T) {
 	ctx := &types.RunContext{
+		MaxRecords: types.DefaultMaxRecords,
 		StepResults: map[string][]types.StepResult{
 			"discover": {{
 				Location: "0/RP0/CPU0",
@@ -61,6 +62,7 @@ func TestExtractRecordsPreservesContextAcrossLinesAndFinalLine(t *testing.T) {
 
 func TestExtractRecordsResetsContextBetweenResults(t *testing.T) {
 	ctx := &types.RunContext{
+		MaxRecords: types.DefaultMaxRecords,
 		StepResults: map[string][]types.StepResult{
 			"discover": {
 				{Output: []byte("VRF: NMNET\n10.0.0.0/24")},
@@ -88,6 +90,7 @@ func TestExtractRecordsResetsContextBetweenResults(t *testing.T) {
 
 func TestExtractRecordsFiltersDeduplicatesAndLimits(t *testing.T) {
 	ctx := &types.RunContext{
+		MaxRecords: types.DefaultMaxRecords,
 		StepResults: map[string][]types.StepResult{
 			"discover": {{Output: []byte(
 				"VRF: NMNET\n" +
@@ -126,6 +129,47 @@ func TestExtractRecordsFiltersDeduplicatesAndLimits(t *testing.T) {
 	}
 	if got := ctx.Collections["routes"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("stored collection = %#v, want %#v", got, want)
+	}
+}
+
+func TestExtractRecordsUsesGlobalLimitAndClampsLocalLimit(t *testing.T) {
+	tests := []struct {
+		name        string
+		globalLimit int
+		localLimit  int
+		want        int
+	}{
+		{name: "zero local inherits global", globalLimit: 3, localLimit: 0, want: 3},
+		{name: "local limit is capped by global", globalLimit: 2, localLimit: 5, want: 2},
+		{name: "local limit is tighter", globalLimit: 5, localLimit: 2, want: 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &types.RunContext{
+				MaxRecords: tt.globalLimit,
+				StepResults: map[string][]types.StepResult{
+					"discover": {{Output: []byte("one\ntwo\nthree\nfour\n")}},
+				},
+				Collections: map[string][]types.Record{},
+			}
+			extraction := &types.PipelineExtract{
+				FromStepID: "discover",
+				RecordSpec: &types.RecordSpec{
+					Name:       "values",
+					Pattern:    compiledPipelinePattern(t, `^(?P<value>\S+)$`),
+					MaxRecords: tt.localLimit,
+				},
+			}
+
+			records, err := extractRecords(ctx, extraction)
+			if err != nil {
+				t.Fatalf("extractRecords() error = %v", err)
+			}
+			if got := len(records); got != tt.want {
+				t.Fatalf("record count = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 

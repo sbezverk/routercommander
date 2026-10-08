@@ -3,7 +3,9 @@ package types
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -120,7 +122,7 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 					return err, nil
 				}
 				for field := range fields {
-					if isReservedPipelineRenderField(field) {
+					if IsReservedPipelineRenderField(field) {
 						return fmt.Errorf("extract step %q context field %q conflicts with reserved render field", step.ID, field), nil
 					}
 					ctx.pipelineSymbols.contextFields[field] = struct{}{}
@@ -141,7 +143,7 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 				return err, nil
 			}
 			for field := range recordFields {
-				if isReservedPipelineRenderField(field) {
+				if IsReservedPipelineRenderField(field) {
 					return fmt.Errorf("extract step %q record field %q conflicts with reserved render field", step.ID, field), nil
 				}
 				if _, ok := ctx.pipelineSymbols.contextFields[field]; ok {
@@ -181,6 +183,7 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 			for field := range ctx.pipelineSymbols.collectionFields[step.ForEach.In] {
 				child.pipelineSymbols.contextFields[field] = struct{}{}
 			}
+			child.inForEachStep = true
 			if err, s := doPipelineStepValidation(step.ForEach.Steps, child); err != nil {
 				return fmt.Errorf("ForEach step validation failed: %v", err), nil
 			} else {
@@ -199,7 +202,8 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 					return fmt.Errorf("Branch case must have a 'when' condition"), nil
 				}
 				child := childContext(ctx)
-				if err := validatePredicateFields(child.pipelineSymbols.contextFields, c.When, ""); err != nil {
+				fieldsStore := mergeFieldsStores(ctx.pipelineSymbols.contextFields, child.pipelineSymbols.variableFields)
+				if err := validatePredicateFields(fieldsStore, c.When, ""); err != nil {
 					return fmt.Errorf("branch step %q case %d predicate validation failed: %w", step.ID, caseIndex, err), nil
 				}
 				if err, s := doPipelineStepValidation(c.Steps, child); err != nil {
@@ -217,18 +221,111 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 				}
 			}
 		}
+		if step.Export != nil {
+			if ctx.inForEachStep {
+				return fmt.Errorf("Export step cannot be used inside a ForEach step"), nil
+			}
+			coll, ok := ctx.pipelineSymbols.collectionFields[step.Export.From]
+			if !ok {
+				return fmt.Errorf("Export step 'from' field references a non-existent collection: %s", step.Export.From), nil
+			}
+			if _, ok := coll[step.Export.Field]; !ok {
+				return fmt.Errorf("Export step 'field' references a non-existent field in collection: %s", step.Export.Field), nil
+			}
+			if IsReservedPipelineRenderField(step.Export.As) {
+				return fmt.Errorf("Export step 'as' field cannot reference reserved field: %s", step.Export.As), nil
+			}
+			if _, ok := ctx.pipelineSymbols.variableFields[step.Export.As]; ok {
+				if !step.Export.Overwrite {
+					return fmt.Errorf("Export step 'as' field references an existing variable: %s and 'overwrite' is not set to true", step.Export.As), nil
+				}
+			} else {
+				ctx.pipelineSymbols.variableFields[step.Export.As] = struct{}{}
+			}
+		}
+		if step.Join != nil {
+			if ctx.inForEachStep {
+				return fmt.Errorf("Join step cannot be used inside a ForEach step"), nil
+			}
+			if _, ok := ctx.pipelineSymbols.collectionFields[step.Join.Output]; ok {
+				return fmt.Errorf("Join step 'output' field references an existing collection: %s", step.Join.Output), nil
+			}
+			rightColl, ok := ctx.pipelineSymbols.collectionFields[step.Join.Right]
+			if !ok {
+				return fmt.Errorf("Join step 'right' field references a non-existent collection: %s", step.Join.Right), nil
+			}
+			leftColl, ok := ctx.pipelineSymbols.collectionFields[step.Join.Left]
+			if !ok {
+				return fmt.Errorf("Join step 'left' field references a non-existent collection: %s", step.Join.Left), nil
+			}
+			if _, ok := ctx.collectionNames[step.Join.Output]; ok {
+				return fmt.Errorf("Join step 'output' field references an existing collection name: %s", step.Join.Output), nil
+			}
+			for _, on := range step.Join.On {
+				if _, ok := leftColl[on]; !ok {
+					return fmt.Errorf("Join step 'on' field %q not found in left collection: %s", on, step.Join.Left), nil
+				}
+				if _, ok := rightColl[on]; !ok {
+					return fmt.Errorf("Join step 'on' field %q not found in right collection: %s", on, step.Join.Right), nil
+				}
+			}
+			for k := range rightColl {
+				if slices.Contains(step.Join.On, k) {
+					continue
+				}
+				if _, ok := leftColl[k]; ok {
+					return fmt.Errorf("Join step 'on' field collision: non-key field %q exists in both left and right collections", k), nil
+				}
+			}
+			for k := range leftColl {
+				if slices.Contains(step.Join.On, k) {
+					continue
+				}
+				if _, ok := rightColl[k]; ok {
+					return fmt.Errorf("Join step 'on' field collision: non-key field %q exists in both left and right collections", k), nil
+				}
+			}
+			ctx.pipelineSymbols.collectionFields[step.Join.Output] = make(map[string]struct{})
+			for _, on := range step.Join.On {
+				if IsReservedPipelineRenderField(on) {
+					return fmt.Errorf("Join step 'on' field cannot reference reserved field: %s", on), nil
+				}
+				ctx.pipelineSymbols.collectionFields[step.Join.Output][on] = struct{}{}
+			}
+			mergeRecords(leftColl, rightColl, step.Join.On, ctx.pipelineSymbols.collectionFields[step.Join.Output])
+			ctx.collectionNames[step.Join.Output] = struct{}{}
+		}
 	}
 	return nil, pSteps
 }
 
+func mergeRecords(left, right map[string]struct{}, skip []string, result map[string]struct{}) {
+	if result == nil {
+		result = make(map[string]struct{})
+	}
+	skipSet := make(map[string]struct{}, len(skip))
+	for _, field := range skip {
+		skipSet[field] = struct{}{}
+	}
+	for k := range left {
+		if _, shouldSkip := skipSet[k]; shouldSkip {
+			continue
+		}
+		result[k] = struct{}{}
+	}
+	for k := range right {
+		if _, shouldSkip := skipSet[k]; shouldSkip {
+			continue
+		}
+		result[k] = struct{}{}
+	}
+}
+
 func childContext(parent *pipelineValidationContext) *pipelineValidationContext {
 	child := *parent
-
-	child.pipelineSymbols.contextFields = make(map[string]struct{})
-	for field := range parent.pipelineSymbols.contextFields {
-		child.pipelineSymbols.contextFields[field] = struct{}{}
-	}
-
+	child.pipelineSymbols.variableFields = maps.Clone(parent.pipelineSymbols.variableFields)
+	child.pipelineSymbols.contextFields = maps.Clone(parent.pipelineSymbols.contextFields)
+	child.pipelineSymbols.collectionFields = maps.Clone(parent.pipelineSymbols.collectionFields)
 	return &child
 }
 
@@ -251,7 +348,7 @@ func namedCaptureFields(pattern *Pattern, description string) (map[string]struct
 	return fields, nil
 }
 
-func isReservedPipelineRenderField(field string) bool {
+func IsReservedPipelineRenderField(field string) bool {
 	switch field {
 	case "RouterName", "Location":
 		return true
@@ -293,7 +390,7 @@ func validatePredicateFields(symbols map[string]struct{}, predicate *Predicate, 
 		if path == "" {
 			path = "root"
 		}
-		return fmt.Errorf("predicate %q references unavailable field %q", path, predicate.Field)
+		return fmt.Errorf("%w: predicate %q references unavailable field %q", ErrPipelineFieldNotFound, path, predicate.Field)
 	}
 	return nil
 }
@@ -304,4 +401,14 @@ func predicateChildPath(parent, operator string, index int) string {
 		return child
 	}
 	return parent + "." + child
+}
+
+func mergeFieldsStores(stores ...map[string]struct{}) map[string]struct{} {
+	merged := make(map[string]struct{})
+	for _, store := range stores {
+		for k := range store {
+			merged[k] = struct{}{}
+		}
+	}
+	return merged
 }

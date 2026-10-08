@@ -1,3 +1,5 @@
+# Last updated: 2026-10-06 14:20:51 UTC
+
 # Consolidated FIB-ENCAP-IDA / PATHLIST investigation workflow.
 #
 # The workflow screens every router first. It then follows every unresolved
@@ -77,7 +79,7 @@ pipeline:
       record_spec:
         name: unresolved_prefixes
         pattern:
-          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:<[^>]+>)?\s*$'
+          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
         inherit:
           - vrf
         deduplicate_by:
@@ -94,11 +96,11 @@ pipeline:
         - pattern:
             pattern_string: '^VRF:\s+(?P<next_hop_vrf>[A-Za-z0-9_.:-]+)\s*$'
         - pattern:
-            pattern_string: '^\s*(?P<next_hop_prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:<[^>]+>)?\s*$'
+            pattern_string: '^\s*(?P<next_hop_prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
       record_spec:
         name: unresolved_next_hops
         pattern:
-          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)(?:<[^>]+>)?\s*$'
+          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
         inherit:
           - next_hop_vrf
           - next_hop_prefix

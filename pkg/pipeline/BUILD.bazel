@@ -8,6 +8,8 @@ go_library(
         "pipeline.go",
         "extract.go",
         "branch.go",
+        "export.go",
+        "join.go",
     ],
     importpath = "github.com/sbezverk/routercommander/pkg/pipeline",
     deps = [
@@ -22,6 +24,8 @@ go_test(
     srcs = [
         "branch_test.go",
         "extract_test.go",
+        "export_test.go",
+        "join_test.go",
         "pipeline_test.go",
     ],
     embed = [":pipeline"],

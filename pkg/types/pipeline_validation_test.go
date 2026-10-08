@@ -36,9 +36,11 @@ func pipelineTestExtract(id, from, collection, recordPattern, contextPattern str
 
 func validateTestPipeline(steps []*PipelineStep) (error, *pipelineValidationContext) {
 	ctx := &pipelineValidationContext{
+		inForEachStep:   false,
 		stepIDs:         make(map[string]struct{}),
 		collectionNames: make(map[string]struct{}),
 		pipelineSymbols: pipelineSymbols{
+			variableFields:   make(map[string]struct{}),
 			contextFields:    make(map[string]struct{}),
 			collectionFields: make(map[string]map[string]struct{}),
 		},
@@ -155,10 +157,8 @@ func TestPipelineSymbolsCollectAndIsolateScopes(t *testing.T) {
 			t.Fatalf("expected routes collection field %q", field)
 		}
 	}
-	for field := range map[string]bool{"next_hop": true, "child_context": true} {
-		if _, ok := ctx.pipelineSymbols.collectionFields["details"][field]; !ok {
-			t.Fatalf("expected details collection field %q", field)
-		}
+	if _, ok := ctx.pipelineSymbols.collectionFields["details"]; ok {
+		t.Fatal("child collection leaked into parent scope")
 	}
 }
 

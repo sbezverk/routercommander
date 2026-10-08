@@ -41,6 +41,10 @@ func NewRunContext(r types.Router, commander *types.Commander) *types.RunContext
 	if commander.PipelineLimits != nil && commander.PipelineLimits.MaxCommands != 0 {
 		maxCommands = commander.PipelineLimits.MaxCommands
 	}
+	maxRecords := types.DefaultMaxRecords
+	if commander.PipelineLimits != nil && commander.PipelineLimits.MaxRecords != 0 {
+		maxRecords = commander.PipelineLimits.MaxRecords
+	}
 	commandsRun := 0
 	return &types.RunContext{
 		Variables:   map[string]string{},
@@ -51,6 +55,7 @@ func NewRunContext(r types.Router, commander *types.Commander) *types.RunContext
 		MaxDepth:    maxDepth,
 		CommandsRun: &commandsRun,
 		MaxCommands: maxCommands,
+		MaxRecords:  maxRecords,
 	}
 }
 
@@ -160,6 +165,22 @@ func executeStep(
 		_ = records
 
 	}
+	if step.Export != nil {
+		if err := executeExport(ctx, step.Export); err != nil {
+			if step.OnError == types.OnErrorTypeContinueRecord {
+				return skipRecordError(ctx, step, err)
+			}
+			return stepError(ctx, step, err)
+		}
+	}
+	if step.Join != nil {
+		if err := executeJoin(ctx, step.Join); err != nil {
+			if step.OnError == types.OnErrorTypeContinueRecord {
+				return skipRecordError(ctx, step, err)
+			}
+			return stepError(ctx, step, err)
+		}
+	}
 
 	return nil
 }
@@ -219,4 +240,19 @@ func buildRenderData(runCtx *types.RunContext) map[string]any {
 	}
 
 	return data
+}
+
+func checkForCollection(ctx *types.RunContext, name string) ([]types.Record, error) {
+	coll, ok := ctx.Collections[name]
+	if !ok {
+		return nil, fmt.Errorf("collection %q not found", name)
+	}
+	if coll == nil {
+		return nil, fmt.Errorf("collection %q is nil", name)
+	}
+	if len(coll) == 0 {
+		return nil, fmt.Errorf("collection %q is empty", name)
+	}
+
+	return coll, nil
 }

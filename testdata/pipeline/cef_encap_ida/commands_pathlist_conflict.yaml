@@ -1,0 +1,275 @@
+# FIB-ENCAP-IDA / PATHLIST conflict investigation workflow.
+#
+# Scope:
+#   Routers already screened as having an encap-ID conflict. The workflow
+#   still performs a lightweight screen so it can stop cleanly on a router
+#   outside this bucket.
+#
+# This workflow identifies the conflict mechanism. It does not claim that
+# link-bandwidth/UCMP is the cause. The collected BGP, RIB, CEF and recursive
+# transport evidence is intended to distinguish that hypothesis from label
+# stack, path-resolution, key-collision and stale-ID/reuse hypotheses.
+#
+# Deliberate current-implementation workarounds:
+#   - The affected inventory uses 0/RP0/CPU0. A single explicit location is
+#     used to avoid duplicate commands from location: all.
+#   - There is no global scalar export/join. The encap-ID and dependent prefix
+#     evidence is therefore collected inside the encap_conflicts loop.
+#   - The final retry-db and trace commands are raw evidence. Their output is
+#     preserved even when the current parser cannot correlate every retry
+#     block with an encap-ID record.
+#   - PATHLIST refcnt/retry-reason fields are intentionally not required in
+#     the extraction pattern. Some IOS XR outputs omit them, as on WRCIPI52.
+
+pipeline_limits:
+  max_depth: 8
+  max_commands: 5000
+
+pipeline:
+  # -------------------------------------------------------------------------
+  # Stage 1: identify routers in this conflict bucket.
+  # -------------------------------------------------------------------------
+  - id: stage1_show_clock
+    run:
+      command: show clock
+
+  - id: stage1_show_version
+    run:
+      command: show version
+
+  - id: stage1_unresolved
+    run:
+      command: show cef vrf all unresolved
+      location:
+        - 0/RP0/CPU0
+
+  - id: extract_unresolved_prefixes
+    extract:
+      from_step_id: stage1_unresolved
+      context:
+        - pattern:
+            pattern_string: '^VRF:\s+(?P<vrf>[A-Za-z0-9_.:-]+)\s*$'
+      record_spec:
+        name: unresolved_prefixes
+        pattern:
+          pattern_string: '^\s*(?P<prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
+        inherit:
+          - vrf
+        where:
+          - field: vrf
+            not_equals: mgmt
+        deduplicate_by:
+          - vrf
+          - prefix
+
+  - id: extract_unresolved_next_hops
+    extract:
+      from_step_id: stage1_unresolved
+      context:
+        - pattern:
+            pattern_string: '^VRF:\s+(?P<next_hop_vrf>[A-Za-z0-9_.:-]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*(?P<next_hop_prefix>[0-9A-Fa-f:.]+/\d+)\s+[0-9A-Fa-f:.]+/\d+\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
+      record_spec:
+        name: unresolved_next_hops
+        pattern:
+          pattern_string: '^\s*(?:[0-9A-Fa-f:.]+/\d+\s+)?(?P<next_hop>[0-9A-Fa-f:.]+/\d+)\s+\(\?\)(?:\s+<[^>]+>)?\s*$'
+        inherit:
+          - next_hop_vrf
+          - next_hop_prefix
+        where:
+          - field: next_hop_vrf
+            not_equals: mgmt
+        deduplicate_by:
+          - next_hop_vrf
+          - next_hop
+
+  # Preserve direct evidence for every unresolved prefix and its recursive
+  # next hop before following the encap-ID conflict.
+  - id: collect_unresolved_prefix_evidence
+    on_error: continue_record
+    for_each:
+      in: unresolved_prefixes
+      steps:
+        - id: inspect_unresolved_prefix
+          run:
+            command: show cef vrf {{.vrf}} {{.prefix}} detail
+            location:
+              - 0/RP0/CPU0
+          on_error: continue_record
+
+  - id: collect_unresolved_next_hop_evidence
+    on_error: continue_record
+    for_each:
+      in: unresolved_next_hops
+      steps:
+        - id: inspect_unresolved_next_hop
+          run:
+            command: show cef {{.next_hop}} detail
+            location:
+              - 0/RP0/CPU0
+          on_error: continue_record
+
+        - id: extract_unresolved_local_labels
+          extract:
+            from_step_id: inspect_unresolved_next_hop
+            record_spec:
+              name: unresolved_local_labels
+              pattern:
+                pattern_string: '^\s*local label\s+(?P<local_label>\d+)\s+labels imposed\s+\{[^}]+\}\s*$'
+              deduplicate_by:
+                - local_label
+
+        - id: collect_unresolved_mpls_label_evidence
+          on_error: continue_record
+          for_each:
+            in: unresolved_local_labels
+            steps:
+              - id: inspect_unresolved_mpls_label
+                run:
+                  command: show mpls forwarding labels {{.local_label}} {{.local_label}} detail
+                  location:
+                    - 0/RP0/CPU0
+                on_error: continue_record
+
+  # A router outside this bucket normally returns no conflict records. This
+  # is intentionally the last required screen before conflict-specific work.
+  - id: stage1_encap_id_conflict
+    run:
+      command: show cef encap-id conflict detail
+      location:
+        - 0/RP0/CPU0
+
+  - id: extract_encap_conflicts
+    extract:
+      from_step_id: stage1_encap_id_conflict
+      context:
+        - pattern:
+            pattern_string: '^Encap id:\s*(?P<encap_id>0x[0-9A-Fa-f]+)\s*$'
+        - pattern:
+            pattern_string: '^\s*Object ID:\s*(?P<object_id>0x[0-9A-Fa-f]+)(?:,\s*PD Meta Data:\s*[0-9]+)?\s*$'
+      record_spec:
+        name: encap_conflicts
+        pattern:
+          pattern_string: '^\s*Number of dependents \(conflict/nonconflict\):\s+(?P<conflict_count>[0-9]+)/(?P<nonconflict_count>[0-9]+)\s*$'
+        inherit:
+          - encap_id
+          - object_id
+        where:
+          - field: conflict_count
+            not_equals: '0'
+        deduplicate_by:
+          - encap_id
+          - conflict_count
+          - nonconflict_count
+
+  # -------------------------------------------------------------------------
+  # Stage 2: encap-ID and dependent PATHLIST evidence.
+  # -------------------------------------------------------------------------
+  - id: collect_conflict_evidence
+    on_error: continue_record
+    for_each:
+      in: encap_conflicts
+      steps:
+        - id: inspect_encap_id
+          run:
+            command: show cef encap-id {{.encap_id}} detail
+            location:
+              - 0/RP0/CPU0
+          on_error: continue_record
+
+        - id: extract_conflict_pathlists
+          extract:
+            from_step_id: inspect_encap_id
+            context:
+              - pattern:
+                  pattern_string: '^Encap id:\s*(?P<detail_encap_id>0x[0-9A-Fa-f]+)\s*$'
+              - pattern:
+                  pattern_string: '^\s*(?P<pathlist_class>Conflict|NonConflict) objects:\s*$'
+              # refcnt and retry reason are intentionally not required. They
+              # are absent from some 7.7.2 outputs, including WRCIPI52.
+              - pattern:
+                  pattern_string: '^\s*PATHLIST\s+pl:(?P<pathlist_ptr>0x[0-9A-Fa-f]+)\s+paths:(?P<path_count>[0-9]+)\s+pl-type:(?P<pathlist_type>\S+)(?:\s+refcnt:[0-9]+)?(?:\s+retry reason:\S+)?\s*$'
+            record_spec:
+              name: conflict_pathlists
+              pattern:
+                pattern_string: '^\s*1st prefix dependent:\s+(?P<detail_vrf>[A-Za-z0-9_.:-]+)\s+(?P<detail_vrf_id>0x[0-9A-Fa-f]+)\s+(?P<detail_prefix>[0-9A-Fa-f:.]+/\d+)\s+leaf:(?P<detail_leaf>0x[0-9A-Fa-f]+)\s*$'
+              inherit:
+                - detail_encap_id
+                - pathlist_class
+                - pathlist_ptr
+                - path_count
+                - pathlist_type
+              where:
+                - field: detail_vrf
+                  not_equals: mgmt
+              deduplicate_by:
+                - pathlist_class
+                - pathlist_ptr
+                - detail_vrf
+                - detail_prefix
+
+        # Each displayed first dependent is collected. The non-conflicting
+        # dependent is important: it is the comparison object, not proof that
+        # the displayed prefix is the only prefix using that PATHLIST.
+        - id: collect_conflict_bgp
+          on_error: continue_record
+          for_each:
+            in: conflict_pathlists
+            steps:
+              - id: inspect_conflict_bgp
+                run:
+                  command: show bgp vrf {{.detail_vrf}} ipv4 unicast {{.detail_prefix}} detail
+                on_error: continue_record
+
+        - id: collect_conflict_route
+          on_error: continue_record
+          for_each:
+            in: conflict_pathlists
+            steps:
+              - id: inspect_conflict_route
+                run:
+                  command: show route vrf {{.detail_vrf}} ipv4 {{.detail_prefix}} detail
+                on_error: continue_record
+
+        - id: collect_conflict_cef
+          on_error: continue_record
+          for_each:
+            in: conflict_pathlists
+            steps:
+              - id: inspect_conflict_cef
+                run:
+                  command: show cef vrf {{.detail_vrf}} ipv4 {{.detail_prefix}} detail
+                  location:
+                    - 0/RP0/CPU0
+                on_error: continue_record
+
+        - id: collect_conflict_cef_internal
+          on_error: continue_record
+          for_each:
+            in: conflict_pathlists
+            steps:
+              - id: inspect_conflict_cef_internal
+                run:
+                  command: show cef vrf {{.detail_vrf}} ipv4 {{.detail_prefix}} internal
+                  location:
+                    - 0/RP0/CPU0
+                on_error: continue_record
+
+  # -------------------------------------------------------------------------
+  # Stage 3: router-wide historical evidence. Each is intentionally after the
+  # conflict-specific commands so an empty optional result cannot prevent the
+  # most important evidence from being collected.
+  # -------------------------------------------------------------------------
+  - id: stage3_cef_trace
+    run:
+      command: show cef trace
+      pipe_modifier: 'include "PATHLIST conflict|path_info_init"'
+      location:
+        - 0/RP0/CPU0
+
+  - id: stage3_retry_db
+    run:
+      command: show cef vrf all retry-db
+      location:
+        - 0/RP0/CPU0

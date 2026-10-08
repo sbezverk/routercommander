@@ -212,26 +212,34 @@ func (c *Commander) Validate() error {
 			c.PipelineLimits = &PipelineLimits{
 				MaxDepth:    DefaultMaxPipelineDepth,
 				MaxCommands: DefaultMaxPipelineCommands,
+				MaxRecords:  DefaultMaxRecords,
 			}
 		} else {
 			if c.PipelineLimits.MaxDepth <= 0 {
 				return fmt.Errorf("pipeline max depth must be greater than 0")
-			} else if c.PipelineLimits.MaxDepth > DefaultMaxPipelineDepth {
-				return fmt.Errorf("pipeline max depth cannot exceed %d", DefaultMaxPipelineDepth)
+			} else if c.PipelineLimits.MaxDepth > MaximumPipelineDepth {
+				return fmt.Errorf("pipeline max depth cannot exceed %d", MaximumPipelineDepth)
 			}
 			if c.PipelineLimits.MaxCommands <= 0 {
 				return fmt.Errorf("pipeline max commands must be greater than 0")
-			} else if c.PipelineLimits.MaxCommands > DefaultMaxPipelineCommands {
-				return fmt.Errorf("pipeline max commands cannot exceed %d", DefaultMaxPipelineCommands)
+			} else if c.PipelineLimits.MaxCommands > MaximumPipelineCommands {
+				return fmt.Errorf("pipeline max commands cannot exceed %d", MaximumPipelineCommands)
+			}
+			if c.PipelineLimits.MaxRecords < 0 {
+				return fmt.Errorf("pipeline max records must be greater or equal to 0")
+			} else if c.PipelineLimits.MaxRecords > MaximumRecords {
+				return fmt.Errorf("pipeline max records cannot exceed %d", MaximumRecords)
 			}
 		}
 		// Processing Pipeline
 		if err, pSteps := validatePipeline(c.Pipeline, &pipelineValidationContext{
+			inForEachStep:   false,
 			stepIDs:         make(map[string]struct{}),
 			collectionNames: make(map[string]struct{}),
 			pipelineSymbols: pipelineSymbols{
 				contextFields:    make(map[string]struct{}),
 				collectionFields: make(map[string]map[string]struct{}),
+				variableFields:   make(map[string]struct{}),
 			},
 			levels:           0,
 			maxPipelineDepth: c.PipelineLimits.MaxDepth,
@@ -309,14 +317,17 @@ type CommandResult struct {
 type PipelineLimits struct {
 	MaxDepth    int `yaml:"max_depth"`    // Maximum recursive pipeline depth.
 	MaxCommands int `yaml:"max_commands"` // Maximum generated commands per router.
+	MaxRecords  int `yaml:"max_records"`  // Maximum permitted records in a collection.
 }
 
 type pipelineSymbols struct {
 	contextFields    map[string]struct{}
 	collectionFields map[string]map[string]struct{}
+	variableFields   map[string]struct{}
 }
 
 type pipelineValidationContext struct {
+	inForEachStep    bool
 	stepIDs          map[string]struct{}
 	collectionNames  map[string]struct{}
 	pipelineSymbols  pipelineSymbols
