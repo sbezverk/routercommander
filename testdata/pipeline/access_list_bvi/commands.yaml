@@ -1,13 +1,14 @@
+# Updated: 2026-10-08 20:54 CEST
 # Troubleshoot the affected BVI3318 ACL installation.
 #
 # The first three stages follow the dependency chain:
 #
 #   ACL usage -> BVI -> IFH -> filtered extlif object
 #
-# The internal-TCAM lookup then discovers the DB ID used by
-# INGRESS_ACL_L3_IPV4. The supplied VOQ output shows that the physical
-# interface hosting the affected path is on NPU 0, so the final diagshell
-# command uses NPU 0 explicitly and renders only the DB ID dynamically.
+# The internal-TCAM lookup discovers the DB IDs used by
+# INGRESS_ACL_L3_IPV4. The physical-interface loop discovers the hosting
+# NPU(s), and a keyed join correlates the two collections before the final
+# diagshell command is rendered. No NPU or DB ID is hardcoded.
 #
 # The routercommander location is explicitly set on every command because
 # this test is for the fixed 0/0/CPU0 location. Location is deliberately not
@@ -19,7 +20,7 @@ pipeline:
     run:
       command: show access-lists ipv4 UE-OUTBOUND-ROAMING-IPV4-IN usage pfilter
       location:
-        - 0/RP0/CPU0
+        - 0/0/CPU0
 
   - id: extract_affected_bvi
     extract:
@@ -57,6 +58,13 @@ pipeline:
         - id: inspect_bvi_extlif
           for_each:
             in: bvi_ifhs
+            outputs:
+              - from: extlif_acl_bindings
+                into: extlif_acl_bindings_by_bvi
+                mode: append
+                deduplicate_by:
+                  - dpa_ifh
+                  - ipv4_acl_id
             steps:
               - id: discover_extlif
                 run:
@@ -83,6 +91,13 @@ pipeline:
                     deduplicate_by:
                       - dpa_ifh
                       - ipv4_acl_id
+      outputs:
+        - from: extlif_acl_bindings_by_bvi
+          into: extlif_acl_bindings
+          mode: append
+          deduplicate_by:
+            - dpa_ifh
+            - ipv4_acl_id
 
   # Discover the hosting NPUs dynamically:
   #
@@ -94,6 +109,8 @@ pipeline:
   - id: discover_bvi_l2vpn
     run:
       command: show run l2vpn
+      location:
+        - 0/0/CPU0
 
   - id: extract_bvi_bundles
     extract:
@@ -112,10 +129,18 @@ pipeline:
   - id: inspect_bvi_bundles
     for_each:
       in: bvi_bundles
+      outputs:
+        - from: hosting_npus_by_bundle
+          into: hosting_npus
+          mode: append
+          deduplicate_by:
+            - npu
       steps:
         - id: inspect_bvi_bundle
           run:
             command: sh int bundle-ether {{.bundle_id}}
+            location:
+              - 0/0/CPU0
 
         - id: extract_physical_interfaces
           extract:
@@ -130,6 +155,12 @@ pipeline:
         - id: inspect_physical_interfaces
           for_each:
             in: physical_interfaces
+            outputs:
+              - from: hosting_npus
+                into: hosting_npus_by_bundle
+                mode: append
+                deduplicate_by:
+                  - npu
             steps:
               - id: discover_hosting_npu
                 run:
@@ -143,7 +174,7 @@ pipeline:
                   record_spec:
                     name: hosting_npus
                     pattern:
-                      pattern_string: '^\s*\S+\s+\S+\s+(?P<npu>[0-9]+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s*$'
+                      pattern_string: '^\s*\S+\s+\S+\s+(?P<npu>[0-9]+)\s+[0-9]+\s+[0-9]+\s+[0-9]+\s+[0-9]+\s+[0-9]+\s+\S+\s+\S+\s*$'
                     deduplicate_by:
                       - npu
 
@@ -160,40 +191,53 @@ pipeline:
         name: ingress_acl_databases
         pattern:
           pattern_string: '^\s*(?P<npu>[0-9]+)\s+4\s+160b\s+pmf-0\s+[0-9]+\s+[0-9]+\s+(?P<db_id>[0-9]+)\s+INGRESS_ACL_L3_IPV4\s*$'
-        where:
-          - field: npu
-            equals: '0'
         deduplicate_by:
           - npu
           - db_id
 
+  - id: correlate_fia_targets
+    join:
+      left: hosting_npus
+      right: ingress_acl_databases
+      on:
+        - npu
+      output: fia_targets
+      unmatched: error
+
   - id: inspect_fia_acl_table
     for_each:
-      in: ingress_acl_databases
+      in: fia_targets
       steps:
         - id: inspect_fia_db
           run:
-            command: 'show controllers fia diagshell 0 "diag field T db={{.db_id}}"'
+            command: 'show controllers fia diagshell {{.npu}} "diag field T db={{.db_id}}"'
             location:
               - 0/0/CPU0
 
-  # These two commands were requested by the ACL development team. They are
-  # intentionally top-level because they do not depend on a particular DB-ID
-  # record. The current Command times/interval fields repeat one command;
-  # future command-group support should allow both commands to be repeated as
-  # one unit.
+  # These two commands were requested by the ACL development team. They do
+  # not depend on a particular DB-ID, but they must run once per discovered
+  # hosting NPU. Command times/interval repeats each command five times with
+  # a two-second interval for that NPU.
   - id: inspect_fia_irpp_signature_block
-    run:
-      command: 'show controllers fia diagshell 0 "diag pp sig block=irpp"'
-      times: 5
-      interval: 2
-      location:
-        - 0/0/CPU0
+    for_each:
+      in: hosting_npus
+      steps:
+        - id: inspect_fia_irpp_signature_block_command
+          run:
+            command: 'show controllers fia diagshell {{.npu}} "diag pp sig block=irpp"'
+            times: 5
+            interval: 2
+            location:
+              - 0/0/CPU0
 
   - id: inspect_fia_last_field
-    run:
-      command: 'show controllers fia diagshell 0 "diag field last"'
-      times: 5
-      interval: 2
-      location:
-        - 0/0/CPU0
+    for_each:
+      in: hosting_npus
+      steps:
+        - id: inspect_fia_last_field_command
+          run:
+            command: 'show controllers fia diagshell {{.npu}} "diag field last"'
+            times: 5
+            interval: 2
+            location:
+              - 0/0/CPU0

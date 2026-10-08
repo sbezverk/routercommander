@@ -21,6 +21,13 @@ const (
 	OnErrorTypeStopRouter     = "stop_router"
 )
 
+// CollectionDelta contains records produced by one child iteration for one
+// parent aggregate collection. It is merged only after that iteration succeeds.
+type CollectionDelta struct {
+	Target  string
+	Records []Record
+}
+
 // Record is one extracted item, represented as field names and string values.
 type Record map[string]string
 
@@ -315,9 +322,57 @@ func (pe *PipelineExtract) Validate() error {
 	return nil
 }
 
+type Output struct {
+	From          string   `yaml:"from"`
+	Into          string   `yaml:"into"`
+	Mode          string   `yaml:"mode"`
+	DeduplicateBy []string `yaml:"deduplicate_by"`
+}
+
+func (o *Output) Validate() error {
+	if o == nil {
+		return fmt.Errorf("Output object is nil")
+	}
+	o.From = strings.TrimSpace(o.From)
+	if o.From == "" {
+		return fmt.Errorf("Output 'from' field cannot be empty")
+	}
+	o.Into = strings.TrimSpace(o.Into)
+	if o.Into == "" {
+		return fmt.Errorf("Output 'into' field cannot be empty")
+	}
+	o.Mode = strings.TrimSpace(o.Mode)
+	switch o.Mode {
+	case "":
+		o.Mode = "append"
+	case "append":
+		// Valid modes
+	default:
+		return fmt.Errorf("Output 'mode' field has an invalid value: %s", o.Mode)
+	}
+	uniqueDedup := make(map[string]struct{})
+	for i, field := range o.DeduplicateBy {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			return fmt.Errorf("Output 'deduplicate_by' contains an empty field")
+		}
+		if IsReservedPipelineRenderField(field) {
+			return fmt.Errorf("Output 'deduplicate_by' contains a reserved field: %s", field)
+		}
+		o.DeduplicateBy[i] = field
+		if _, exists := uniqueDedup[field]; exists {
+			return fmt.Errorf("Output 'deduplicate_by' contains duplicate field: %s", field)
+		}
+		uniqueDedup[field] = struct{}{}
+	}
+
+	return nil
+}
+
 type PipelineForEach struct {
-	In    string          `yaml:"in"`    // Existing RunContext.Collections key to iterate over.
-	Steps []*PipelineStep `yaml:"steps"` // Child steps run once for each current record.
+	In      string          `yaml:"in"`                // Existing RunContext.Collections key to iterate over.
+	Steps   []*PipelineStep `yaml:"steps"`             // Child steps run once for each current record.
+	Outputs []*Output       `yaml:"outputs,omitempty"` // Output configuration to publish records collected by steps to  the immediate parent.
 }
 
 func (fe *PipelineForEach) Validate() error {
@@ -332,6 +387,14 @@ func (fe *PipelineForEach) Validate() error {
 			return fmt.Errorf("PipelineForEach step validation failed: %v", err)
 		}
 	}
+	if fe.Outputs != nil {
+		for i, output := range fe.Outputs {
+			if err := output.Validate(); err != nil {
+				return fmt.Errorf("PipelineForEach 'outputs' at index %d validation failed: %v", i, err)
+			}
+		}
+	}
+
 	return nil
 }
 

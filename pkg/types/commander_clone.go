@@ -171,7 +171,24 @@ func clonePipelineForEachForRun(forEach *PipelineForEach) *PipelineForEach {
 	}
 	out := *forEach
 	out.Steps = clonePipelineStepsForRun(forEach.Steps)
+	out.Outputs = cloneOutputsForRun(forEach.Outputs)
 	return &out
+}
+
+func cloneOutputsForRun(outputs []*Output) []*Output {
+	if len(outputs) == 0 {
+		return nil
+	}
+	out := make([]*Output, len(outputs))
+	for i, output := range outputs {
+		if output == nil {
+			continue
+		}
+		outputCopy := *output
+		outputCopy.DeduplicateBy = slices.Clone(output.DeduplicateBy)
+		out[i] = &outputCopy
+	}
+	return out
 }
 
 func clonePipelineBranchForRun(branch *PipelineBranch) *PipelineBranch {

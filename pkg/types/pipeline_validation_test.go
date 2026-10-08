@@ -319,6 +319,130 @@ func TestBranchCanBeFirstChildOfForEach(t *testing.T) {
 	}
 }
 
+func TestForEachOutputRegistersAggregateSchema(t *testing.T) {
+	steps := []*PipelineStep{
+		pipelineTestRun("discover"),
+		pipelineTestExtract("extract", "discover", "routes", `(?P<id>\S+)`, "", nil),
+		{
+			ID: "iterate",
+			ForEach: &PipelineForEach{
+				In: "routes",
+				Steps: []*PipelineStep{
+					pipelineTestRun("child_discover"),
+					pipelineTestExtract("child_extract", "child_discover", "child_interfaces", `(?P<interface>\S+)`, "", nil),
+				},
+				Outputs: []*Output{{
+					From:          "child_interfaces",
+					Into:          "all_interfaces",
+					DeduplicateBy: []string{"interface"},
+				}},
+			},
+		},
+		{
+			ID: "export",
+			Export: &PipelineExport{
+				From:    "all_interfaces",
+				Field:   "interface",
+				As:      "selected_interface",
+				Require: "exactly_one",
+			},
+		},
+	}
+
+	err, ctx := validateTestPipeline(steps)
+	if err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+	if _, ok := ctx.collectionNames["all_interfaces"]; !ok {
+		t.Fatal("aggregate collection name was not registered")
+	}
+	if _, ok := ctx.pipelineSymbols.collectionFields["all_interfaces"]["interface"]; !ok {
+		t.Fatal("aggregate collection schema was not registered")
+	}
+}
+
+func TestForEachCanReferenceJoinOutput(t *testing.T) {
+	steps := []*PipelineStep{
+		pipelineTestRun("discover_left"),
+		pipelineTestExtract("extract_left", "discover_left", "hosting_npus", `(?P<npu>\S+)`, "", nil),
+		pipelineTestRun("discover_right"),
+		pipelineTestExtract("extract_right", "discover_right", "acl_databases", `(?P<npu>\S+)\s+(?P<db_id>\S+)`, "", nil),
+		{
+			ID: "correlate",
+			Join: &PipelineJoin{
+				Left:   "hosting_npus",
+				Right:  "acl_databases",
+				On:     []string{"npu"},
+				Output: "fia_targets",
+			},
+		},
+		{
+			ID: "inspect",
+			ForEach: &PipelineForEach{
+				In:    "fia_targets",
+				Steps: []*PipelineStep{pipelineTestRun("inspect_target")},
+			},
+		},
+	}
+
+	if err, _ := validateTestPipeline(steps); err != nil {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestForEachOutputValidationRejectsInvalidReferences(t *testing.T) {
+	base := func(output []*Output) []*PipelineStep {
+		return []*PipelineStep{
+			pipelineTestRun("discover"),
+			pipelineTestExtract("extract", "discover", "routes", `(?P<id>\S+)`, "", nil),
+			{
+				ID: "iterate",
+				ForEach: &PipelineForEach{
+					In: "routes",
+					Steps: []*PipelineStep{
+						pipelineTestRun("child_discover"),
+						pipelineTestExtract("child_extract", "child_discover", "child_interfaces", `(?P<interface>\S+)`, "", nil),
+					},
+					Outputs: output,
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name  string
+		steps []*PipelineStep
+	}{
+		{
+			name: "parent collection used as source",
+			steps: base([]*Output{{
+				From: "routes", Into: "all_interfaces",
+			}}),
+		},
+		{
+			name: "unknown deduplication field",
+			steps: base([]*Output{{
+				From: "child_interfaces", Into: "all_interfaces", DeduplicateBy: []string{"missing"},
+			}}),
+		},
+		{
+			name: "duplicate target",
+			steps: base([]*Output{
+				{From: "child_interfaces", Into: "all_interfaces"},
+				{From: "child_interfaces", Into: "all_interfaces"},
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err, _ := validateTestPipeline(tt.steps); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
 func TestDefaultOnlyBranchDoesNotRequirePrecedingExtraction(t *testing.T) {
 	steps := []*PipelineStep{{
 		ID: "default_branch",

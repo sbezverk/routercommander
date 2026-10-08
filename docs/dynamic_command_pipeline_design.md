@@ -2149,20 +2149,373 @@ child-local and is not automatically available to a later pipeline-level
 
 This is the correct default for record isolation, but it creates an important
 constraint for the ACL/BVI workflow. If a later pipeline-level join needs data
-discovered inside a `for_each`, the workflow must eventually provide an
-explicit collection-aggregation boundary. Possible future designs include:
+discovered inside a `for_each`, the workflow needs an explicit aggregation
+boundary. The selected initial design is a `for_each` output declaration that
+publishes named child collections to named parent collections.
 
-- a `for_each` output declaration that appends selected child records to a
-  named parent collection;
-- a dedicated `collect`/`publish_records` operation outside the loop; or
-- restructuring the workflow so related values are extracted into one
-  combined record before entering `for_each`.
+##### 5A.6.1 User-facing model
 
-The first export/join implementation must not silently merge child
-collections into the parent. Until an explicit aggregation operation exists,
-validation should reject a join whose input collection is produced only in a
-child record scope. This preserves isolation and gives the user an actionable
-diagnostic instead of an empty or partial correlation.
+The proposed shape is:
+
+~~~yaml
+- id: inspect_bvis
+  for_each:
+    in: bvi_bundles
+    outputs:
+      - from: physical_interfaces
+        into: all_physical_interfaces
+        mode: append
+        deduplicate_by:
+          - bvi
+          - interface
+    steps:
+      - id: discover_interfaces
+        run:
+          command: show bundle-ether {{.bundle_id}}
+          location:
+            - 0/0/CPU0
+
+      - id: extract_interfaces
+        extract:
+          from_step_id: discover_interfaces
+          record_spec:
+            name: physical_interfaces
+            pattern:
+              pattern_string: '^\\s*(?P<interface>TenGigE\\S+)\\s*$'
+            inherit:
+              - bvi
+~~~
+
+`outputs` is part of `for_each`, not a new general-purpose pipeline step.
+This keeps aggregation tied to the scope boundary where the child context is
+created and destroyed. It also avoids allowing arbitrary steps to mutate an
+ancestor context.
+
+The initial version supports the following fields:
+
+~~~yaml
+outputs:
+  - from: child_collection
+    into: parent_collection
+    mode: append
+    deduplicate_by: [field_a, field_b]
+~~~
+
+Their meanings are:
+
+- `from` is the name of a collection created in the current child scope;
+- `into` is the name of the aggregate collection in the **immediate parent
+  scope**;
+- `mode: append` adds records in iteration order; and
+- `deduplicate_by` is optional and applies to the aggregate collection while
+  records are merged.
+
+The first implementation should support only `append`. `replace`, arbitrary
+ancestor targets, implicit publication, and publication of scalar variables
+are deliberately out of scope. Scalar values continue to require the
+explicit `export` operation.
+
+##### 5A.6.2 Scope and lifetime rules
+
+The following rules define the ownership boundary:
+
+1. The `from` collection is resolved in the child context after all child
+   steps for the current iteration have completed.
+2. The `into` collection belongs to the immediate parent context.
+3. The child collection remains available only inside that child iteration.
+4. The parent aggregate is not visible to the child while the child is being
+   processed. This prevents an iteration from reading data produced by an
+   earlier iteration unless a future feature explicitly enables that behavior.
+5. A nested `for_each` may publish to its immediate parent only. To reach the
+   pipeline root, each intermediate `for_each` must explicitly republish the
+   records at its own boundary.
+6. The aggregate collection becomes available to later sibling steps only
+   after the entire `for_each` completes.
+7. A later pipeline-level `join` or `export` may reference `into`, but may not
+   reference `from` because `from` is child-local.
+
+This gives the collection a clear lifetime:
+
+~~~text
+parent collection
+    -> child iteration creates `from`
+    -> successful iteration produces an output delta
+    -> parent merges delta into `into`
+    -> next iteration starts with an isolated child
+    -> later sibling steps consume `into`
+~~~
+
+##### 5A.6.3 Aggregate initialization
+
+The validator should register every `into` collection as a collection produced
+by the `for_each` step. At runtime, the executor should initialize it as an
+empty, non-nil collection before starting iterations, even when the loop has
+no records or no child output.
+
+This makes the result deterministic. A later consumer sees an existing empty
+collection rather than sometimes seeing a missing collection and sometimes
+seeing an empty collection. The strict Join source rule still applies: a Join
+using an empty aggregate must fail with an actionable empty-collection error.
+
+The target collection must be new in the parent scope. It must not overwrite:
+
+- an existing extracted collection;
+- another Join output;
+- a collection produced by another `for_each` output declaration; or
+- a reserved runtime name.
+
+Multiple output declarations in the same `for_each` may target different
+collections. Two declarations must not target the same `into` name. This is a
+configuration error even when both declarations use the same `from` collection
+or identical merge settings. A future explicit multi-source aggregation policy
+could relax this rule, but the initial implementation must reject duplicate
+targets.
+
+This constraint applies within one `for_each` declaration before execution
+starts:
+
+~~~yaml
+# Invalid: both outputs publish to the same parent collection.
+outputs:
+  - from: physical_interfaces
+    into: all_interfaces
+  - from: npu_interfaces
+    into: all_interfaces
+~~~
+
+The validator should report the duplicate `into` name and the indexes of the
+conflicting output declarations. It must not silently merge the declarations
+or let the last declaration overwrite the first one.
+
+##### 5A.6.4 Record merge semantics
+
+At the end of a successful iteration, records from the child `from`
+collection are copied into the parent `into` collection. The merge must create
+fresh record maps or otherwise guarantee that later child mutations cannot
+modify already-published records.
+
+The initial merge contract is:
+
+- preserve the order of the `[]Record` slice in the collection named by the
+  outer `for_each.in` field;
+- preserve the child collection source order within each iteration;
+- append records without changing field names or values;
+- apply `deduplicate_by` after each append, retaining the first record;
+- reject a configured deduplication field that is missing from a record; and
+- leave child collections and previously merged parent records unchanged.
+
+The `RunContext.Collections` map is used only to find the collection by name.
+The implementation must not iterate that map to determine processing order.
+For example, if `for_each.in` refers to a collection whose record slice is
+ordered as `BVI-A`, then `BVI-B`, and each child produces two records, the
+aggregate order is:
+
+~~~text
+BVI-A record 1
+BVI-A record 2
+BVI-B record 1
+BVI-B record 2
+~~~
+
+This ordering is useful for diagnostics and makes results reproducible even if
+the implementation later changes its internal data structures. If parallel
+iteration is introduced in the future, each output delta must carry the
+parent-record ordinal so the merge can restore this order.
+
+##### 5A.6.5 Iteration success and error behavior
+
+Publication must be transactional at the iteration boundary. The executor
+should not mutate the parent aggregate while child steps are still running.
+Instead, it should collect a per-iteration delta and merge it only when the
+child execution returns success.
+
+The behavior is:
+
+- child succeeds: merge all declared output deltas;
+- child returns `ErrPipelineSkipRecord`: discard that iteration's deltas and
+  continue according to the existing record-skip behavior;
+- child returns `ErrPipelineNoData`: propagate the pipeline stop signal and do
+  not merge the incomplete iteration;
+- child fails under `stop_router`: discard the delta and stop the router; and
+- child fails under `continue_record`: discard the delta and continue with the
+  next parent record.
+
+This prevents a partially processed BVI from contributing records that look
+complete to a later Join.
+
+##### 5A.6.6 Limits and safety checks
+
+Aggregation participates in both record and command safety limits:
+
+- each child extraction applies its local limit;
+- the global `pipeline_limits.max_records` ceiling applies to the aggregate
+  collection;
+- a merge that would exceed the global ceiling fails before adding the record;
+- `deduplicate_by` is applied before deciding whether the aggregate limit is
+  exceeded if deduplication can eliminate the candidate; and
+- the existing global `max_commands` limit continues to protect recursive
+  command generation.
+
+The validator should reject an output declaration with an unknown `from`
+collection in the child scope, an empty `into`, an unsupported mode, duplicate
+deduplication fields, or a target that already exists in the parent scope.
+Runtime checks must repeat the important collection-existence and field
+checks because programmatic callers may bypass full model validation.
+
+##### 5A.6.7 Validation and symbol collection
+
+Validation must use separate parent and child symbol scopes:
+
+1. Validate `for_each.in` against the parent-visible collection symbols.
+2. Clone the parent symbols for child validation.
+3. Validate every `outputs.from` against collections produced in the child
+   scope, including collections created by nested child steps.
+4. Validate `outputs.into` against the parent scope and reject collisions.
+5. Infer or validate the aggregate output fields from the child collection.
+6. Register `into` in the parent `collectionNames` and
+   `collectionFields` only after the `for_each` declaration is validated.
+7. Make the registered aggregate available to later sibling steps, but not to
+   earlier steps or to the child while it is executing.
+
+For the initial implementation, every `outputs` declaration has exactly one
+source collection and one destination collection. The source collection's
+schema is the set of field names defined by its record pattern plus its
+inherited context fields. That set is copied to the destination collection.
+
+“Incompatible schemas” means that the same logical collection would be defined
+with different field names. For example, this must be rejected:
+
+~~~yaml
+# Invalid: the same child collection name has two different field sets.
+branch:
+  cases:
+    - when: {field: kind, equals: bundle}
+      steps:
+        - id: extract_bundle_members
+          extract:
+            record_spec:
+              name: interfaces
+              pattern: {pattern_string: '(?P<interface>\\S+)'}
+    - when: {field: kind, equals: physical}
+      steps:
+        - id: extract_physical_members
+          extract:
+            record_spec:
+              name: interfaces
+              pattern: {pattern_string: '(?P<member>\\S+)'}
+~~~
+
+The first branch defines `interfaces` with the field `interface`, while the
+second defines it with the field `member`. The validator must reject this
+configuration; it must not silently create a union containing both fields or
+assume that one branch's schema wins.
+
+Different values are not a schema conflict. These records are compatible
+because they have the same field names, even though their values differ:
+
+~~~text
+{interface: TenGigE0/0/0/1}
+{interface: TenGigE0/0/0/2}
+~~~
+
+An empty source collection is also valid and has the declared schema; it simply
+produces no records for that iteration. A runtime record missing a field named
+in `deduplicate_by` is different: that is a runtime data error and must be
+reported rather than silently deduplicated.
+
+Because the initial design also rejects duplicate `into` targets, it never
+merges two unrelated source schemas into one destination. A future multi-source
+aggregation feature would need an explicit field-union or field-intersection
+policy before that restriction could be relaxed.
+
+##### 5A.6.8 Executor implementation shape
+
+The current `ChildForRecord` cloning behavior should remain unchanged. Add an
+explicit per-iteration result rather than sharing parent maps:
+
+~~~go
+type CollectionDelta struct {
+    Target  string
+    Records []types.Record
+}
+~~~
+
+Conceptually, `executeForEach` should perform the following sequence:
+
+~~~text
+validate and initialize parent output collections
+for each parent record:
+    childCtx := ctx.ChildForRecord(record)
+    execute child steps using childCtx
+    if child failed or was skipped:
+        discard child deltas
+        apply existing error policy
+    else:
+        build deltas from declared outputs
+        merge deltas into parent collections
+~~~
+
+The implementation may use a richer internal structure than the example
+`CollectionDelta`, but it must preserve these properties:
+
+- no direct child writes to parent collections;
+- no partial publication after a failed child;
+- fresh records at the merge boundary;
+- explicit target names; and
+- one place where aggregate limits and deduplication are enforced.
+
+##### 5A.6.9 ACL/BVI application
+
+The ACL/BVI workflow can then use the following pattern:
+
+~~~text
+discover BVI-to-bundle relationships
+    -> bvi_bundles
+for_each bvi_bundles
+    discover bundle members
+    -> physical_interfaces (child-local)
+    publish physical_interfaces
+    -> all_physical_interfaces (parent aggregate)
+discover hosting NPU mappings
+    -> hosting_npus
+discover ingress ACL database mappings
+    -> ingress_acl_entries
+join all_physical_interfaces with hosting_npus and ingress_acl_entries
+    -> diagnostic_targets {npu, db_id}
+for_each diagnostic_targets
+    -> run final FIA diagnostic command
+~~~
+
+The final Join cannot run until the outer `for_each` has completed. This is a
+deliberate phase boundary, not a limitation to be hidden by sharing maps.
+
+##### 5A.6.10 Recommended implementation sequence
+
+Implement this feature in small steps:
+
+1. Add an `Outputs` field to `PipelineForEach` and an output declaration type
+   with `From`, `Into`, `Mode`, and `DeduplicateBy`.
+2. Add syntax validation for non-empty names, `append` mode, and valid
+   deduplication fields. Also reject duplicate `into` names within the same
+   `for_each` declaration.
+3. Extend the validation context with child-local output symbols and
+   parent-visible aggregate symbols.
+4. Register aggregate collection schemas in configuration order.
+5. Add an internal collection-delta result to recursive child execution.
+6. Initialize parent aggregate collections before iteration.
+7. Merge successful iteration deltas with fresh records, deduplication, and
+   global record-limit enforcement.
+8. Apply existing `stop_router`, `continue_record`, and no-data behavior.
+9. Add tests for empty loops, one-to-many aggregation, ordering, duplicate
+   suppression, missing fields, limit boundaries, child failures, nested
+   loops, and parent-scope visibility.
+10. Add the ACL/BVI fake-router workflow and verify that the final Join sees
+    only successfully published records.
+
+The first implementation should support publication to the immediate parent
+only. More general aggregation operations can be evaluated later if real
+workflows require conditional publication from multiple points inside a
+child.
 
 #### 5A.7 Streamlined ACL/BVI composition
 

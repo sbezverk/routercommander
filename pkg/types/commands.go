@@ -167,16 +167,10 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 			if step.ForEach.In == "" {
 				return fmt.Errorf("ForEach step 'in' field cannot be empty"), nil
 			}
-			found := false
-			if len(extractSteps) > 0 {
-				for y := 0; y < len(extractSteps); y++ {
-					if step.ForEach.In == pSteps[extractSteps[y]].Extract.RecordSpec.Name {
-						found = true
-						break
-					}
-				}
-			}
-			if !found {
+			// A ForEach source may be created by Extract, Join, or a
+			// ForEach output published by an inner scope. All are registered
+			// in collectionNames as soon as they become visible in this scope.
+			if _, found := ctx.collectionNames[step.ForEach.In]; !found {
 				return fmt.Errorf("ForEach step 'in' field references a non-existent record collection: %s", step.ForEach.In), nil
 			}
 			child := childContext(ctx)
@@ -188,6 +182,42 @@ func doPipelineStepValidation(steps []*PipelineStep, ctx *pipelineValidationCont
 				return fmt.Errorf("ForEach step validation failed: %v", err), nil
 			} else {
 				step.ForEach.Steps = s
+			}
+			if step.ForEach.Outputs != nil {
+				uniqueInto := make(map[string]struct{})
+				for i, output := range step.ForEach.Outputs {
+					if _, ok := uniqueInto[output.Into]; ok {
+						return fmt.Errorf("ForEach step 'output.into' at index %d references a duplicate collection: %s", i, output.Into), nil
+					}
+					if _, ok := ctx.collectionNames[output.Into]; ok {
+						return fmt.Errorf("ForEach step 'output.into' at index %d references an existing collection: %s", i, output.Into), nil
+					}
+					if IsReservedPipelineRenderField(output.Into) {
+						return fmt.Errorf("ForEach step 'output.into' at index %d references a reserved field: %s", i, output.Into), nil
+					}
+					if _, ok := ctx.collectionNames[output.From]; ok {
+						return fmt.Errorf("ForEach step 'output.from' at index %d must reference a child-local collection: %s", i, output.From), nil
+					}
+					if _, ok := child.collectionNames[output.From]; !ok {
+						return fmt.Errorf("ForEach step 'output.from' at index %d references a non-existent collection: %s", i, output.From), nil
+					}
+					from := child.pipelineSymbols.collectionFields[output.From]
+					if from == nil {
+						return fmt.Errorf("ForEach step 'output.from' at index %d has no known schema: %s", i, output.From), nil
+					}
+					for _, dedup := range output.DeduplicateBy {
+						if _, ok := from[dedup]; !ok {
+							return fmt.Errorf("ForEach step 'output.deduplicate_by' at index %d contains a non-existent field: %s", i, dedup), nil
+						}
+					}
+					uniqueInto[output.Into] = struct{}{}
+				}
+				// Publish the aggregate symbols only after every output declaration
+				// has passed validation.
+				for _, output := range step.ForEach.Outputs {
+					ctx.collectionNames[output.Into] = struct{}{}
+					ctx.pipelineSymbols.collectionFields[output.Into] = maps.Clone(child.pipelineSymbols.collectionFields[output.From])
+				}
 			}
 		}
 		if step.Branch != nil {
@@ -326,6 +356,7 @@ func childContext(parent *pipelineValidationContext) *pipelineValidationContext 
 	child.pipelineSymbols.variableFields = maps.Clone(parent.pipelineSymbols.variableFields)
 	child.pipelineSymbols.contextFields = maps.Clone(parent.pipelineSymbols.contextFields)
 	child.pipelineSymbols.collectionFields = maps.Clone(parent.pipelineSymbols.collectionFields)
+	child.collectionNames = maps.Clone(parent.collectionNames)
 	return &child
 }
 

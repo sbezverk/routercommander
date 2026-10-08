@@ -379,3 +379,32 @@ func TestCommanderCloneForRunPreservesPipelineState(t *testing.T) {
 		t.Fatalf("source pipeline limits were mutated")
 	}
 }
+
+func TestCommanderCloneForRunClonesForEachOutputs(t *testing.T) {
+	commands := &Commander{
+		Pipeline: []*PipelineStep{{
+			ID: "iterate",
+			ForEach: &PipelineForEach{
+				In: "source",
+				Steps: []*PipelineStep{{
+					ID:  "child",
+					Run: &Command{Cmd: "show platform"},
+				}},
+				Outputs: []*Output{{
+					From:          "child_records",
+					Into:          "aggregate",
+					DeduplicateBy: []string{"key"},
+				}},
+			},
+		}},
+	}
+
+	clone := commands.CloneForRun()
+	clone.Pipeline[0].ForEach.Outputs[0].DeduplicateBy[0] = "other"
+	clone.Pipeline[0].ForEach.Outputs[0].Into = "other_aggregate"
+
+	output := commands.Pipeline[0].ForEach.Outputs[0]
+	if output.DeduplicateBy[0] != "key" || output.Into != "aggregate" {
+		t.Fatalf("source for_each output was mutated: %+v", output)
+	}
+}

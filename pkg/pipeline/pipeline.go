@@ -81,30 +81,7 @@ func executeStep(
 		ctx.StepPath = previousPath
 	}()
 	if step.ForEach != nil {
-		records, ok := ctx.Collections[step.ForEach.In]
-		if !ok {
-			if step.OnError == types.OnErrorTypeContinueRecord {
-				return skipRecordError(ctx, step, fmt.Errorf("collection %q does not exist", step.ForEach.In))
-			}
-			return stepError(ctx, step, fmt.Errorf("collection %q does not exist", step.ForEach.In))
-		}
-		for _, record := range records {
-			childCtx := ctx.ChildForRecord(record)
-			if err := executePipeline(r, step.ForEach.Steps, childCtx); err != nil {
-				if errors.Is(err, types.ErrPipelineNoData) {
-					return err
-				}
-				if errors.Is(err, types.ErrPipelineSkipRecord) {
-					continue
-				}
-				if step.OnError == types.OnErrorTypeContinueRecord {
-					continue
-				}
-				return err
-			}
-		}
-
-		return nil
+		return executeForEach(r, step, ctx)
 	}
 
 	if step.Branch != nil {
